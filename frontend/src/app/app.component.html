@@ -1,0 +1,43 @@
+<app-repo-selector
+  *ngIf="showSelector || repoPath === null"
+  [canCancel]="repoPath !== null"
+  [initialPath]="repoPath || ''"
+  (repoOpened)="onRepoOpened($event)">
+</app-repo-selector>
+
+<div class="app-shell" *ngIf="repoPath !== null">
+  <div class="app-header">
+    <span class="repo-name">{{ repoName }}</span>
+    <span class="repo-path">{{ repoPath }}</span>
+    <button class="change-repo-btn" (click)="openSelector()">Change repo</button>
+  </div>
+
+  <app-repo-status></app-repo-status>
+
+  <div class="main-layout">
+    <aside class="sidebar">
+      <app-branch-list [repoPath]="repoPath" (branchSelected)="onBranchSelected($event)"></app-branch-list>
+    </aside>
+
+    <main class="content">
+      <div class="tab-bar">
+        <button [class.active]="activeTab === 'commits'" (click)="activeTab = 'commits'">Commits</button>
+        <button [class.active]="activeTab === 'files'" (click)="activeTab = 'files'">Files</button>
+      </div>
+
+      <div class="tab-content" *ngIf="activeTab === 'commits'">
+        <app-commit-log
+          [branch]="selectedBranch"
+          [repoPath]="repoPath"
+          (commitSelected)="onCommitSelected($event)">
+        </app-commit-log>
+
+        <app-commit-detail [sha]="selectedCommit"></app-commit-detail>
+      </div>
+
+      <div class="tab-content" *ngIf="activeTab === 'files'">
+        <app-file-tree [ref]="selectedBranch || 'HEAD'"></app-file-tree>
+      </div>
+    </main>
+  </div>
+</div>

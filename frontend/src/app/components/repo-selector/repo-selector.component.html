@@ -1,0 +1,51 @@
+<div class="overlay">
+  <div class="dialog">
+    <div class="dialog-header">
+      <h2>Open Repository</h2>
+      <button class="close-btn" *ngIf="canCancel" (click)="cancel()">✕</button>
+    </div>
+
+    <!-- Native OS folder picker -->
+    <div class="pick-section">
+      <button class="pick-btn" (click)="pickFolder()" [disabled]="picking">
+        <span class="pick-icon">📂</span>
+        {{ picking ? 'Opening...' : 'Browse for folder...' }}
+      </button>
+      <p class="pick-hint">Opens a native folder picker dialog</p>
+    </div>
+
+    <div class="divider"><span>or drag a folder here</span></div>
+
+    <!-- Drag and drop zone -->
+    <div
+      class="drop-zone"
+      [class.drag-over]="dragOver"
+      (dragover)="onDragOver($event)"
+      (dragleave)="onDragLeave()"
+      (drop)="onDrop($event)">
+      <p>Drop a folder to select it</p>
+    </div>
+
+    <div class="divider"><span>or type a path</span></div>
+
+    <!-- Manual path input -->
+    <div class="manual-input">
+      <input
+        type="text"
+        [(ngModel)]="selectedPath"
+        placeholder="/home/user/my-project"
+        (keydown.enter)="open()"
+        spellcheck="false"
+      />
+    </div>
+
+    <div class="error" *ngIf="error">{{ error }}</div>
+
+    <div class="actions">
+      <button class="secondary" (click)="cancel()" *ngIf="canCancel">Cancel</button>
+      <button class="primary" (click)="open()" [disabled]="loading || !selectedPath.trim()">
+        {{ loading ? 'Opening...' : 'Open' }}
+      </button>
+    </div>
+  </div>
+</div>
