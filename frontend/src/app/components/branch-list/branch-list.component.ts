@@ -16,7 +16,8 @@ import { GitApiService, BranchInfo } from '../../services/git-api.service';
       <button
         class="branch-btn"
         [class.active]="selectedBranch === null"
-        (click)="selectAll()">
+        (click)="selectAll()"
+        (keydown)="onBtnKeydown($event)">
         All branches
       </button>
       @for (b of visibleBranches; track b) {
@@ -25,7 +26,8 @@ import { GitApiService, BranchInfo } from '../../services/git-api.service';
           [class.active]="selectedBranch === b.name"
           [class.current]="b.name === currentBranch"
           [class.unmerged]="b.name !== currentBranch && (b.ahead ?? -1) > 0"
-          (click)="select(b.name)">
+          (click)="select(b.name)"
+          (keydown)="onBtnKeydown($event)">
           <span class="branch-name">{{ b.name }}</span>
           <span class="branch-status">
             @if (b.name === currentBranch) {
@@ -167,6 +169,20 @@ export class BranchListComponent implements OnChanges {
       this.selectedBranch = null;
       this.branchSelected.emit(null);
     });
+  }
+
+  onBtnKeydown(event: KeyboardEvent): void {
+    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+    event.preventDefault();
+    const panel = (event.target as HTMLElement).closest('.branch-panel');
+    if (!panel) return;
+    const buttons = Array.from(panel.querySelectorAll<HTMLElement>('button.branch-btn'));
+    const idx = buttons.indexOf(event.target as HTMLElement);
+    const next = event.key === 'ArrowDown' ? buttons[idx + 1] : buttons[idx - 1];
+    if (next) {
+      next.focus();
+      next.click();
+    }
   }
 
   select(name: string): void {

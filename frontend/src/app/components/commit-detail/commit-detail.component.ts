@@ -1,4 +1,4 @@
-import { Component, Input, OnChanges, inject } from '@angular/core';
+import { Component, Input, OnChanges, ViewChild, ElementRef, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { GitApiService, CommitDetail } from '../../services/git-api.service';
 
@@ -33,15 +33,15 @@ interface DiffLine {
             }
           </div>
           <div class="files-row">
-            @for (f of detail.files; track f) {
-              <span class="file-chip" [class]="f.status">
+            @for (f of detail.files; track f; let i = $index) {
+              <span class="file-chip" [class]="f.status" (click)="scrollToFile(i)" title="Jump to diff">
                 <span class="file-status">{{ f.status[0].toUpperCase() }}</span>{{ f.path }}
               </span>
             }
           </div>
         </div>
         <div class="diff-section">
-          <pre class="diff">@for (line of diffLines; track $index) {<span [class]="line.type">{{ line.text }}
+          <pre class="diff" #diffPre>@for (line of diffLines; track $index; let i = $index) {<span [class]="getLineClass(i, line.type)">{{ line.text }}
 </span>}</pre>
         </div>
       </div>
@@ -124,7 +124,9 @@ interface DiffLine {
       border-radius: 3px;
       padding: 1px 5px;
       white-space: nowrap;
+      cursor: pointer;
     }
+    .file-chip:hover { border-color: #6c7086; color: #cdd6f4; }
     .file-chip .file-status { margin-right: 3px; font-weight: 700; }
     .file-chip.added .file-status { color: #a6e3a1; }
     .file-chip.modified .file-status { color: #f9e2af; }
@@ -155,27 +157,73 @@ interface DiffLine {
     .diff .file-header { color: #45475a; font-size: 10px; line-height: 1.1; display: block; }
     .diff .hunk-header { color: #6c7086; font-size: 11px; line-height: 1.3; display: block; }
     .diff .neutral { display: block; }
+    .diff .flash {
+      animation: line-flash 1.8s ease-out forwards;
+    }
+    @keyframes line-flash {
+      0%   { background: rgba(137, 180, 250, 0.35); }
+      100% { background: transparent; }
+    }
   `]
 })
 export class CommitDetailComponent implements OnChanges {
   private api = inject(GitApiService);
 
   @Input() sha: string | null = null;
+  @ViewChild('diffPre') diffPreRef: ElementRef<HTMLElement> | undefined;
 
   detail: CommitDetail | null = null;
+  diffLines: DiffLine[] = [];
+  fileStartIndices: number[] = [];
+  flashRange: { start: number; end: number } | null = null;
   copyConfirmed = false;
   private copyTimer: ReturnType<typeof setTimeout> | null = null;
+  private flashTimer: ReturnType<typeof setTimeout> | null = null;
 
-  get diffLines(): DiffLine[] {
-    if (!this.detail?.diff) return [];
-    return this.detail.diff.split('\n').map(text => {
+  private computeDiff(): void {
+    if (!this.detail?.diff) {
+      this.diffLines = [];
+      this.fileStartIndices = [];
+      return;
+    }
+    this.fileStartIndices = [];
+    this.diffLines = this.detail.diff.split('\n').map((text, i) => {
       let type: DiffLine['type'] = 'neutral';
       if (text.startsWith('+') && !text.startsWith('+++')) type = 'added';
       else if (text.startsWith('-') && !text.startsWith('---')) type = 'removed';
       else if (text.startsWith('@@')) type = 'hunk-header';
       else if (text.startsWith('diff ') || text.startsWith('index ') || text.startsWith('+++') || text.startsWith('---')) type = 'file-header';
+      if (text.startsWith('diff ')) this.fileStartIndices.push(i);
       return { text, type };
     });
+  }
+
+  scrollToFile(fileIndex: number): void {
+    const pre = this.diffPreRef?.nativeElement;
+    if (!pre || fileIndex >= this.fileStartIndices.length) return;
+    const lineIndex = this.fileStartIndices[fileIndex];
+    const spans = pre.querySelectorAll<HTMLElement>('span');
+    const target = spans[lineIndex];
+    if (!target) return;
+
+    // getBoundingClientRect gives position relative to viewport — add current scrollTop
+    // to get the absolute scroll position within the pre
+    const preRect = pre.getBoundingClientRect();
+    const targetRect = target.getBoundingClientRect();
+    pre.scrollTo({ top: pre.scrollTop + (targetRect.top - preRect.top) - 8, behavior: 'smooth' });
+
+    // Flash all lines for this file's diff section
+    const nextFileStart = this.fileStartIndices[fileIndex + 1] ?? this.diffLines.length;
+    if (this.flashTimer) clearTimeout(this.flashTimer);
+    this.flashRange = { start: lineIndex, end: nextFileStart - 1 };
+    this.flashTimer = setTimeout(() => { this.flashRange = null; }, 1800);
+  }
+
+  getLineClass(index: number, type: string): string {
+    if (this.flashRange && index >= this.flashRange.start && index <= this.flashRange.end) {
+      return `${type} flash`;
+    }
+    return type;
   }
 
   copySha(sha: string): void {
@@ -189,9 +237,16 @@ export class CommitDetailComponent implements OnChanges {
   ngOnChanges(): void {
     if (this.sha) {
       this.detail = null;
-      this.api.getCommitDetail(this.sha).subscribe(d => this.detail = d);
+      this.diffLines = [];
+      this.fileStartIndices = [];
+      this.api.getCommitDetail(this.sha).subscribe(d => {
+        this.detail = d;
+        this.computeDiff();
+      });
     } else {
       this.detail = null;
+      this.diffLines = [];
+      this.fileStartIndices = [];
     }
   }
 }

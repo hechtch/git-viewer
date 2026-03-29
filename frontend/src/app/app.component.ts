@@ -75,7 +75,9 @@ export class AppComponent implements OnInit {
   onBranchSelected(branch: string | null): void {
     this.selectedBranch = branch;
     this.selectedCommit = null;
-    this.activeTab = 'timeline';
+    if (this.activeTab !== 'commits') {
+      this.activeTab = 'timeline';
+    }
   }
 
   onCommitSelected(sha: string): void {
