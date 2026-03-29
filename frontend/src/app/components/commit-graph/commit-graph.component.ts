@@ -216,29 +216,40 @@ export class CommitGraphComponent implements OnChanges {
   }
 
   /** Move up (dir=-1) or down (dir=+1) by visual lane.
-   *  Gathers all directly connected commits (parents + children), filters to those
-   *  in the correct visual direction, picks the closest col. */
+   *  First tries directly connected commits in the correct direction.
+   *  If none, walks the current lane to find the nearest commit that has
+   *  such a cross-lane connection (a branch/merge point), and navigates there. */
   private findCrossLaneNeighbor(current: RenderNode, dir: -1 | 1): RenderNode | undefined {
-    const childShas = this.childrenOf.get(current.entry.sha) ?? [];
+    const crossConnected = this.crossLaneConnections(current, dir);
+    if (crossConnected.length > 0) return crossConnected[0];
+
+    // Walk current lane — find nearest commit that has a cross-lane connection in dir
+    const sameLane = this.renderNodes
+      .filter(n => n.col === current.col && n.entry.sha !== current.entry.sha)
+      .sort((a, b) => Math.abs(a.row - current.row) - Math.abs(b.row - current.row));
+
+    for (const candidate of sameLane) {
+      if (this.crossLaneConnections(candidate, dir).length > 0) {
+        return candidate;
+      }
+    }
+    return undefined;
+  }
+
+  /** Returns directly connected commits (parents + children) in the given visual direction. */
+  private crossLaneConnections(node: RenderNode, dir: -1 | 1): RenderNode[] {
+    const childShas = this.childrenOf.get(node.entry.sha) ?? [];
     const connected: RenderNode[] = [
-      ...current.entry.parents
+      ...node.entry.parents
         .map(sha => this.renderNodes.find(n => n.entry.sha === sha))
         .filter((n): n is RenderNode => !!n),
       ...childShas
         .map(sha => this.renderNodes.find(n => n.entry.sha === sha))
         .filter((n): n is RenderNode => !!n),
     ];
-
-    // Only consider nodes in the correct visual direction
-    const inDir = connected.filter(n => dir === -1 ? n.col < current.col : n.col > current.col);
-    if (inDir.length === 0) return undefined;
-
-    // Pick the one with the nearest col
-    inDir.sort((a, b) => dir === -1
-      ? b.col - a.col  // largest col that is still < current (closest above)
-      : a.col - b.col  // smallest col that is still > current (closest below)
-    );
-    return inDir[0];
+    const inDir = connected.filter(n => dir === -1 ? n.col < node.col : n.col > node.col);
+    inDir.sort((a, b) => dir === -1 ? b.col - a.col : a.col - b.col);
+    return inDir;
   }
 
   private buildChildrenMap() {
