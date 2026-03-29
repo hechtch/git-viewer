@@ -96,21 +96,43 @@ export class GitService {
     const info = await this.git('log', '-1', '--format=%H\t%h\t%an\t%aI\t%P\t%B', sha);
     const [hash, short, author, date, parents, ...rest] = info.split('\t');
     const message = rest.join('\t');
+    const parentShas = parents ? parents.split(' ').filter(Boolean) : [];
+    const isMerge = parentShas.length > 1;
 
-    const diffStat = await this.git('diff-tree', '--no-commit-id', '-r', '--name-status', sha);
-    const files = diffStat.split('\n').filter(Boolean).map((line) => {
-      const [status, ...fileParts] = line.split('\t');
-      return { status: statusLabel(status), path: fileParts.join('\t') };
-    });
+    let files: { status: string; path: string }[];
+    let diff: string;
 
-    const diff = await this.git('diff-tree', '-p', '--no-commit-id', sha);
+    if (isMerge) {
+      // Diff against first parent to show what the merge brought in
+      const diffStat = await this.git('diff-tree', '-r', '--name-status', parentShas[0], sha);
+      files = diffStat.split('\n').filter(Boolean).map((line) => {
+        const [status, ...fileParts] = line.split('\t');
+        return { status: statusLabel(status), path: fileParts.join('\t') };
+      });
+
+      // Try combined diff (--cc) to surface conflict resolutions
+      const ccDiff = await this.git('diff-tree', '--cc', '--no-commit-id', sha).catch(() => '');
+      if (ccDiff.trim()) {
+        diff = ccDiff;
+      } else {
+        // Clean merge — show first-parent diff so the view isn't blank
+        diff = await this.git('diff-tree', '-p', parentShas[0], sha);
+      }
+    } else {
+      const diffStat = await this.git('diff-tree', '--no-commit-id', '-r', '--name-status', sha);
+      files = diffStat.split('\n').filter(Boolean).map((line) => {
+        const [status, ...fileParts] = line.split('\t');
+        return { status: statusLabel(status), path: fileParts.join('\t') };
+      });
+      diff = await this.git('diff-tree', '-p', '--no-commit-id', sha);
+    }
 
     return {
       sha: hash,
       short,
       author,
       date,
-      parents: parents ? parents.split(' ') : [],
+      parents: parentShas,
       message,
       files,
       diff,

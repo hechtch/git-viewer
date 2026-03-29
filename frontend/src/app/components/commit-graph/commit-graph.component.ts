@@ -145,22 +145,14 @@ export class CommitGraphComponent implements OnChanges {
       }
 
       case 'ArrowUp': {
-        // Navigate to child (newer); if at head of lane, fall back to moving left (older in same lane)
-        target = this.findChild(selected);
-        if (!target) {
-          target = this.findNeighborInLane(selected, 1);
-        }
+        // Move to visually higher lane (smaller col); prefer cross-lane, fall back to any
+        target = this.findCrossLaneNeighbor(selected, -1);
         break;
       }
 
       case 'ArrowDown': {
-        // Navigate to first parent (older); if no parent in graph, fall back to moving right (newer)
-        target = selected.entry.parents.length > 0
-          ? this.renderNodes.find(n => n.entry.sha === selected.entry.parents[0])
-          : undefined;
-        if (!target) {
-          target = this.findNeighborInLane(selected, -1);
-        }
+        // Move to visually lower lane (larger col); prefer cross-lane, fall back to any
+        target = this.findCrossLaneNeighbor(selected, +1);
         break;
       }
 
@@ -221,18 +213,30 @@ export class CommitGraphComponent implements OnChanges {
     el.scrollTo({ left: Math.max(0, target), behavior: 'smooth' });
   }
 
-  /** Find a child of the current node (a commit that has current.sha as a parent),
-   *  preferring one in the same lane, otherwise the first found. */
-  private findChild(current: RenderNode): RenderNode | undefined {
+  /** Move up (dir=-1) or down (dir=+1) by visual lane.
+   *  Gathers all directly connected commits (parents + children), filters to those
+   *  in the correct visual direction, picks the closest col. */
+  private findCrossLaneNeighbor(current: RenderNode, dir: -1 | 1): RenderNode | undefined {
     const childShas = this.childrenOf.get(current.entry.sha) ?? [];
-    if (childShas.length === 0) return undefined;
-    // Prefer a child in the same lane
-    const sameLane = childShas
-      .map(sha => this.renderNodes.find(n => n.entry.sha === sha))
-      .filter((n): n is RenderNode => !!n && n.col === current.col);
-    if (sameLane.length > 0) return sameLane[0];
-    // Fall back to first available child
-    return this.renderNodes.find(n => childShas.includes(n.entry.sha));
+    const connected: RenderNode[] = [
+      ...current.entry.parents
+        .map(sha => this.renderNodes.find(n => n.entry.sha === sha))
+        .filter((n): n is RenderNode => !!n),
+      ...childShas
+        .map(sha => this.renderNodes.find(n => n.entry.sha === sha))
+        .filter((n): n is RenderNode => !!n),
+    ];
+
+    // Only consider nodes in the correct visual direction
+    const inDir = connected.filter(n => dir === -1 ? n.col < current.col : n.col > current.col);
+    if (inDir.length === 0) return undefined;
+
+    // Pick the one with the nearest col
+    inDir.sort((a, b) => dir === -1
+      ? b.col - a.col  // largest col that is still < current (closest above)
+      : a.col - b.col  // smallest col that is still > current (closest below)
+    );
+    return inDir[0];
   }
 
   private buildChildrenMap() {
