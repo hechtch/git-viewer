@@ -72,8 +72,10 @@ export function computeLayout(entries: GraphEntry[]): LayoutNode[] {
   }
 
   // Any commits not claimed (e.g. no ref pointed at them directly)
-  // get assigned to their first parent's column, or a new column
-  for (const entry of entries) {
+  // get assigned to their first parent's column, or a new column.
+  // Iterate oldest→newest so parents are resolved before their children.
+  for (let i = entries.length - 1; i >= 0; i--) {
+    const entry = entries[i];
     if (!branchOf.has(entry.sha)) {
       // Try to inherit from first parent
       const parentCol = entry.parents.length > 0

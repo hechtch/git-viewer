@@ -25,6 +25,7 @@ import { GitApiService, BranchInfo } from '../../services/git-api.service';
         class="branch-btn"
         [class.active]="selectedBranch === b.name"
         [class.current]="b.name === currentBranch"
+        [class.unmerged]="b.name !== currentBranch && (b.ahead ?? -1) > 0"
         (click)="select(b.name)">
         <span class="branch-name">{{ b.name }}</span>
         <span class="branch-status">
@@ -90,6 +91,8 @@ import { GitApiService, BranchInfo } from '../../services/git-api.service';
     }
     .branch-btn:hover { background: #313244; }
     .branch-btn.active { background: #45475a; }
+    .branch-btn.unmerged { color: #cdd6f4; font-weight: 600; }
+    .branch-btn.unmerged .branch-name { color: #cdd6f4; }
     .branch-name {
       overflow: hidden;
       text-overflow: ellipsis;
