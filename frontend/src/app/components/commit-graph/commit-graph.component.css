@@ -84,8 +84,20 @@
   overflow-y: hidden;
 }
 
+.mode-td .graph-scroll {
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
 .graph-svg {
   display: block;
+}
+
+.td-lane-label {
+  font-size: 11px;
+  font-family: monospace;
+  font-weight: 600;
+  pointer-events: none;
 }
 
 .lane-guides line {

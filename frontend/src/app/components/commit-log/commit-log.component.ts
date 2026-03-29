@@ -33,9 +33,16 @@ interface CommitRow extends CommitSummary {
           </span>
         }
         @if (!branch) {
-          <button class="toggle-merged-btn" (click)="showMerged = !showMerged">
-            {{ showMerged ? 'Hide merged' : 'Show merged' }}
-          </button>
+          <div class="graph-controls">
+            <div class="btn-group">
+              <button class="view-btn" [class.active]="viewMode === 'lr'" (click)="viewMode = 'lr'" title="Left-to-right">↔ LR</button>
+              <button class="view-btn" [class.active]="viewMode === 'td'" (click)="viewMode = 'td'" title="Top-down">↕ TD</button>
+            </div>
+            <button class="view-btn" [class.active]="reversed" (click)="reversed = !reversed" title="Reverse direction">⇄ Rev</button>
+            <button class="toggle-merged-btn" (click)="showMerged = !showMerged">
+              {{ showMerged ? 'Hide merged' : 'Show merged' }}
+            </button>
+          </div>
         }
       </div>
       <div class="search-row">
@@ -57,6 +64,8 @@ interface CommitRow extends CommitSummary {
           [entries]="visibleGraphEntries"
           [branches]="visibleBranchInfos"
           [showMerged]="showMerged"
+          [viewMode]="viewMode"
+          [reversed]="reversed"
           [jumpToBranch]="jumpToBranch"
           (commitSelected)="selectCommit($event)">
         </app-commit-graph>
@@ -167,8 +176,34 @@ interface CommitRow extends CommitSummary {
     .author { color: #9399b2; font-size: 11px; margin-left: auto; }
     .date { color: #6c7086; font-size: 11px; flex-shrink: 0; }
     .empty { color: #9399b2; font-style: italic; padding: 16px; }
-    .toggle-merged-btn {
+    .graph-controls {
       margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .btn-group {
+      display: flex;
+    }
+    .btn-group .view-btn:first-child {
+      border-radius: 3px 0 0 3px;
+      border-right-width: 0;
+    }
+    .btn-group .view-btn:last-child {
+      border-radius: 0 3px 3px 0;
+    }
+    .view-btn {
+      font-size: 10px;
+      color: #6c7086;
+      background: none;
+      border: 1px solid #45475a;
+      border-radius: 3px;
+      padding: 2px 7px;
+      cursor: pointer;
+    }
+    .view-btn:hover { color: #cdd6f4; border-color: #6c7086; }
+    .view-btn.active { color: #89b4fa; border-color: #89b4fa; background: rgba(137,180,250,0.1); }
+    .toggle-merged-btn {
       font-size: 10px;
       color: #6c7086;
       background: none;
@@ -214,6 +249,8 @@ export class CommitLogComponent implements OnChanges {
   currentBranch = '';
   selectedSha = '';
   showMerged = true;
+  viewMode: 'lr' | 'td' = 'lr';
+  reversed = false;
   searchQuery = '';
   searchError = '';
   private searchRegex: RegExp | null = null;
