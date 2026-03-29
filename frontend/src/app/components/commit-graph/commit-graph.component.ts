@@ -158,10 +158,12 @@ export class CommitGraphComponent implements OnChanges {
 
       case '+':
       case '=':
+        if (event.ctrlKey || event.metaKey) return; // handled by AppComponent
         this.adjustZoom(this.ZOOM_STEP);
         event.preventDefault();
         return;
       case '-':
+        if (event.ctrlKey || event.metaKey) return; // handled by AppComponent
         this.adjustZoom(-this.ZOOM_STEP);
         event.preventDefault();
         return;

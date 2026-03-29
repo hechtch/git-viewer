@@ -19,7 +19,7 @@
       <app-branch-list [repoPath]="repoPath" (branchSelected)="onBranchSelected($event)"></app-branch-list>
     </aside>
 
-    <main class="content">
+    <main class="content" [style.--text-zoom]="contentZoom">
       <div class="tab-bar">
         <button [class.active]="activeTab === 'commits'" (click)="activeTab = 'commits'">Commits</button>
         <button [class.active]="activeTab === 'files'" (click)="activeTab = 'files'">Files</button>

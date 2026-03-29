@@ -134,7 +134,7 @@ interface DiffLine {
       border-radius: 6px;
       padding: 8px 12px;
       overflow: auto;
-      font-size: 12px;
+      font-size: calc(12px * var(--text-zoom, 1));
       line-height: 1.5;
       color: #cdd6f4;
       white-space: pre;

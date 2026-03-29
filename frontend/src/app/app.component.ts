@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, HostListener } from '@angular/core';
 import { GitApiService } from './services/git-api.service';
 
 @Component({
@@ -9,6 +9,22 @@ import { GitApiService } from './services/git-api.service';
 export class AppComponent implements OnInit {
   repoPath: string | null = null;
   showSelector = false;
+  contentZoom = 1.0;
+
+  @HostListener('document:keydown', ['$event'])
+  onKeyDown(event: KeyboardEvent) {
+    if (!(event.ctrlKey || event.metaKey)) return;
+    if (event.key === '=' || event.key === '+') {
+      event.preventDefault();
+      this.contentZoom = +(Math.min(3.0, this.contentZoom + 0.1)).toFixed(1);
+    } else if (event.key === '-') {
+      event.preventDefault();
+      this.contentZoom = +(Math.max(0.4, this.contentZoom - 0.1)).toFixed(1);
+    } else if (event.key === '0') {
+      event.preventDefault();
+      this.contentZoom = 1.0;
+    }
+  }
 
   selectedBranch: string | null = null;
   selectedCommit: string | null = null;

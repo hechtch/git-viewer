@@ -120,6 +120,7 @@ interface CommitRow extends CommitSummary {
       text-overflow: ellipsis;
       white-space: nowrap;
       color: #cdd6f4;
+      font-size: calc(13px * var(--text-zoom, 1));
     }
     .commit-meta {
       display: flex;
