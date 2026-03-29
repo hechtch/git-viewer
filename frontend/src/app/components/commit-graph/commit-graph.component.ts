@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnChanges, HostListener } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnChanges, HostListener, ViewChild, ElementRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { BranchInfo, GraphEntry } from '../../services/git-api.service';
 import { computeLayout, LayoutNode, LayoutEdge } from './graph-layout';
@@ -51,6 +51,8 @@ export class CommitGraphComponent implements OnChanges {
   readonly CHAR_WIDTH = 7;
   readonly BADGE_PAD = 12;
 
+  @ViewChild('graphScroll') graphScrollRef!: ElementRef<HTMLElement>;
+
   renderNodes: RenderNode[] = [];
   allEdges: RenderEdge[] = [];
   laneLabels: LaneLabel[] = [];
@@ -60,8 +62,16 @@ export class CommitGraphComponent implements OnChanges {
   toastMessage = '';
   toastVisible = false;
 
+  /** sha → list of child shas (commits whose parents include this sha) */
+  private childrenOf = new Map<string, string[]>();
+
   svgWidth = 800;
   svgHeight = 200;
+  zoom = 1.0;
+
+  readonly MIN_ZOOM = 0.3;
+  readonly MAX_ZOOM = 2.0;
+  readonly ZOOM_STEP = 0.15;
 
   private _maxCol = 0;
   private toastTimer: any = null;
@@ -76,6 +86,7 @@ export class CommitGraphComponent implements OnChanges {
     this.buildLaneLabels(nodes);
     this.buildEdges();
     this.computeDimensions();
+    this.buildChildrenMap();
   }
 
   /** X position: commit index → horizontal position (oldest on left, newest on right) */
@@ -102,7 +113,6 @@ export class CommitGraphComponent implements OnChanges {
 
     const selected = this.renderNodes.find(n => n.entry.sha === this.selectedSha);
     if (!selected) {
-      // Nothing selected — select the newest commit (row 0)
       if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) {
         this.selectNode(this.renderNodes[0]);
         event.preventDefault();
@@ -117,32 +127,70 @@ export class CommitGraphComponent implements OnChanges {
         // Next newer commit in same lane (lower row number)
         target = this.findNeighborInLane(selected, -1);
         break;
-      case 'ArrowLeft':
-        // Next older commit in same lane (higher row number)
+
+      case 'ArrowLeft': {
+        // Next older commit in same lane; at boundary jump to parent lane (non-main only)
         target = this.findNeighborInLane(selected, 1);
+        if (!target) {
+          if (selected.col !== 0 && selected.entry.parents.length > 0) {
+            // Jump to first parent (likely on main or another branch)
+            target = this.renderNodes.find(n => n.entry.sha === selected.entry.parents[0]);
+          } else {
+            const lane = this.laneLabels.find(l => l.col === selected.col);
+            const laneName = lane?.name ?? `lane ${selected.col}`;
+            this.showToast(`First commit of ${laneName} (${selected.entry.short})`);
+          }
+        }
         break;
-      case 'ArrowUp':
-        // Same row position, move to lane above
-        target = this.findNeighborInCol(selected, -1);
+      }
+
+      case 'ArrowUp': {
+        // Navigate to child (newer); if at head of lane, fall back to moving left (older in same lane)
+        target = this.findChild(selected);
+        if (!target) {
+          target = this.findNeighborInLane(selected, 1);
+        }
         break;
-      case 'ArrowDown':
-        // Same row position, move to lane below
-        target = this.findNeighborInCol(selected, 1);
+      }
+
+      case 'ArrowDown': {
+        // Navigate to first parent (older); if no parent in graph, fall back to moving right (newer)
+        target = selected.entry.parents.length > 0
+          ? this.renderNodes.find(n => n.entry.sha === selected.entry.parents[0])
+          : undefined;
+        if (!target) {
+          target = this.findNeighborInLane(selected, -1);
+        }
         break;
+      }
+
+      case '+':
+      case '=':
+        this.adjustZoom(this.ZOOM_STEP);
+        event.preventDefault();
+        return;
+      case '-':
+        this.adjustZoom(-this.ZOOM_STEP);
+        event.preventDefault();
+        return;
+      case '0':
+        if (event.ctrlKey || event.metaKey) {
+          this.zoom = 1.0;
+          event.preventDefault();
+        }
+        return;
+
       default:
         return;
     }
 
     if (target) {
       this.selectNode(target);
-    } else if (selected && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) {
-      const isFirst = event.key === 'ArrowLeft';
+      this.scrollToNode(target);
+    } else if (event.key === 'ArrowRight') {
       const lane = this.laneLabels.find(l => l.col === selected.col);
       const laneName = lane?.name ?? `lane ${selected.col}`;
-      const msg = isFirst
-        ? `You are at the first commit ${selected.entry.short} of ${laneName}`
-        : `You are at the head of ${laneName} (${selected.entry.short})`;
-      this.showToast(msg);
+      this.showToast(`At head of ${laneName} (${selected.entry.short})`);
     }
     event.preventDefault();
   }
@@ -151,6 +199,51 @@ export class CommitGraphComponent implements OnChanges {
     this.selectedSha = node.entry.sha;
     this.selectedCol = node.col;
     this.commitSelected.emit(node.entry.sha);
+  }
+
+  onWheel(event: WheelEvent) {
+    if (event.ctrlKey || event.metaKey) {
+      event.preventDefault();
+      this.adjustZoom(event.deltaY < 0 ? this.ZOOM_STEP : -this.ZOOM_STEP);
+    }
+  }
+
+  adjustZoom(delta: number) {
+    this.zoom = Math.min(this.MAX_ZOOM, Math.max(this.MIN_ZOOM, +(this.zoom + delta).toFixed(2)));
+  }
+
+  private scrollToNode(node: RenderNode) {
+    const el = this.graphScrollRef?.nativeElement;
+    if (!el) return;
+    const x = this.nodeX(node.row);
+    const halfView = el.clientWidth / 2;
+    const target = x - halfView;
+    el.scrollTo({ left: Math.max(0, target), behavior: 'smooth' });
+  }
+
+  /** Find a child of the current node (a commit that has current.sha as a parent),
+   *  preferring one in the same lane, otherwise the first found. */
+  private findChild(current: RenderNode): RenderNode | undefined {
+    const childShas = this.childrenOf.get(current.entry.sha) ?? [];
+    if (childShas.length === 0) return undefined;
+    // Prefer a child in the same lane
+    const sameLane = childShas
+      .map(sha => this.renderNodes.find(n => n.entry.sha === sha))
+      .filter((n): n is RenderNode => !!n && n.col === current.col);
+    if (sameLane.length > 0) return sameLane[0];
+    // Fall back to first available child
+    return this.renderNodes.find(n => childShas.includes(n.entry.sha));
+  }
+
+  private buildChildrenMap() {
+    this.childrenOf.clear();
+    for (const node of this.renderNodes) {
+      for (const parentSha of node.entry.parents) {
+        const kids = this.childrenOf.get(parentSha) ?? [];
+        kids.push(node.entry.sha);
+        this.childrenOf.set(parentSha, kids);
+      }
+    }
   }
 
   private showToast(message: string) {
@@ -175,16 +268,6 @@ export class CommitGraphComponent implements OnChanges {
     const idx = sameLane.findIndex(n => n.entry.sha === current.entry.sha);
     const next = sameLane[idx + direction];
     return next;
-  }
-
-  /** Find the nearest commit in an adjacent lane (up = -1, down = +1) */
-  private findNeighborInCol(current: RenderNode, direction: number): RenderNode | undefined {
-    const targetCol = current.col + direction;
-    const inLane = this.renderNodes.filter(n => n.col === targetCol);
-    if (inLane.length === 0) return undefined;
-    // Pick the commit closest to current row
-    inLane.sort((a, b) => Math.abs(a.row - current.row) - Math.abs(b.row - current.row));
-    return inLane[0];
   }
 
   private buildLaneLabels(nodes: LayoutNode[]) {

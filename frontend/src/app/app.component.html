@@ -26,13 +26,16 @@
       </div>
 
       <div class="tab-content" *ngIf="activeTab === 'commits'">
-        <app-commit-log
-          [branch]="selectedBranch"
-          [repoPath]="repoPath"
-          (commitSelected)="onCommitSelected($event)">
-        </app-commit-log>
-
-        <app-commit-detail [sha]="selectedCommit"></app-commit-detail>
+        <div class="commit-log-panel">
+          <app-commit-log
+            [branch]="selectedBranch"
+            [repoPath]="repoPath"
+            (commitSelected)="onCommitSelected($event)">
+          </app-commit-log>
+        </div>
+        <div class="commit-detail-panel">
+          <app-commit-detail [sha]="selectedCommit"></app-commit-detail>
+        </div>
       </div>
 
       <div class="tab-content" *ngIf="activeTab === 'files'">

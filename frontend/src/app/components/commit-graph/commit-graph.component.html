@@ -5,13 +5,13 @@
 </div>
 <div class="graph-container">
   <!-- Pinned lane labels on the left -->
-  <div class="lane-labels" [style.height.px]="svgHeight">
+  <div class="lane-labels" [style.height.px]="svgHeight * zoom">
     <div
       *ngFor="let lane of laneLabels"
       class="lane-label-row"
       [class.lane-label-row-selected]="lane.col === selectedCol"
-      [style.top.px]="nodeY(lane.col) - LANE_HEIGHT / 2"
-      [style.height.px]="LANE_HEIGHT">
+      [style.top.px]="(nodeY(lane.col) - LANE_HEIGHT / 2) * zoom"
+      [style.height.px]="LANE_HEIGHT * zoom">
       <span
         class="lane-label"
         [class.lane-label-selected]="lane.col === selectedCol"
@@ -28,10 +28,11 @@
   </div>
 
   <!-- Horizontally scrollable graph -->
-  <div class="graph-scroll">
+  <div class="graph-scroll" #graphScroll (wheel)="onWheel($event)" [style.cursor]="'default'">
     <svg
-      [attr.width]="svgWidth"
-      [attr.height]="svgHeight"
+      [attr.width]="svgWidth * zoom"
+      [attr.height]="svgHeight * zoom"
+      [attr.viewBox]="'0 0 ' + svgWidth + ' ' + svgHeight"
       class="graph-svg">
 
       <!-- Horizontal lane row targets (hover highlight) -->

@@ -4,7 +4,7 @@ import { GitApiService, CommitDetail } from '../../services/git-api.service';
 
 interface DiffLine {
   text: string;
-  type: 'added' | 'removed' | 'header' | 'neutral';
+  type: 'added' | 'removed' | 'file-header' | 'hunk-header' | 'neutral';
 }
 
 @Component({
@@ -13,33 +13,29 @@ interface DiffLine {
   imports: [CommonModule],
   template: `
     <div class="detail" *ngIf="detail">
-      <div class="header">
-        <h3>{{ detail.message }}</h3>
-        <div class="meta">
-          <span class="sha-row">
-            <span class="sha">{{ detail.sha }}</span>
-            <button class="copy-btn" (click)="copySha(detail.sha)" [title]="'Copy SHA'">
-              {{ copyConfirmed ? '✓' : '⎘' }}
-            </button>
-          </span>
+      <div class="meta-block">
+        <div class="msg">{{ detail.message }}</div>
+        <div class="meta-row">
+          <span class="sha">{{ detail.sha }}</span>
+          <button class="copy-btn" (click)="copySha(detail.sha)" [title]="'Copy SHA'">{{ copyConfirmed ? '✓' : '⎘' }}</button>
+          <span class="sep">·</span>
           <span class="author">{{ detail.author }}</span>
-          <span class="date">{{ detail.date | date:'medium' }}</span>
+          <span class="sep">·</span>
+          <span class="date">{{ detail.date | date:'MMM d, y, h:mm a' }}</span>
+          <ng-container *ngIf="detail.parents.length">
+            <span class="sep">·</span>
+            <span class="label">parent<ng-container *ngIf="detail.parents.length > 1">s</ng-container></span>
+            <span *ngFor="let p of detail.parents" class="parent-sha">{{ p.substring(0, 7) }}</span>
+          </ng-container>
         </div>
-        <div class="parents" *ngIf="detail.parents.length">
-          Parents: <span *ngFor="let p of detail.parents" class="parent-sha">{{ p.substring(0, 7) }}</span>
-        </div>
-      </div>
-
-      <div class="files">
-        <h4>Changed Files ({{ detail.files.length }})</h4>
-        <div *ngFor="let f of detail.files" class="file-entry" [ngClass]="f.status">
-          <span class="status-badge">{{ f.status }}</span>
-          <span class="file-path">{{ f.path }}</span>
+        <div class="files-row">
+          <span *ngFor="let f of detail.files" class="file-chip" [class]="f.status">
+            <span class="file-status">{{ f.status[0].toUpperCase() }}</span>{{ f.path }}
+          </span>
         </div>
       </div>
 
       <div class="diff-section">
-        <h4>Diff</h4>
         <pre class="diff"><ng-container *ngFor="let line of diffLines"><span [class]="line.type">{{ line.text }}
 </span></ng-container></pre>
       </div>
@@ -53,84 +49,101 @@ interface DiffLine {
     </div>
   `,
   styles: [`
-    .detail { padding: 12px; }
+    :host {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      min-height: 0;
+      overflow: hidden;
+    }
+    .detail {
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      min-height: 0;
+      overflow: hidden;
+      box-sizing: border-box;
+    }
     .placeholder {
       padding: 32px;
       text-align: center;
       color: #9399b2;
       font-style: italic;
     }
-    .header {
-      border-bottom: 1px solid #313244;
-      padding-bottom: 12px;
-      margin-bottom: 12px;
+    .meta-block {
+      flex-shrink: 0;
+      padding-bottom: 6px;
+      margin-bottom: 4px;
     }
-    h3 { margin: 0 0 6px 0; color: #cdd6f4; font-size: 16px; }
-    h4 { margin: 12px 0 6px 0; color: #a6adc8; font-size: 13px; }
-    .meta {
+    .msg { color: #cdd6f4; font-size: 14px; font-weight: 600; margin-bottom: 3px; }
+    .meta-row {
       display: flex;
-      gap: 12px;
-      font-size: 12px;
-      color: #9399b2;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 5px;
+      font-size: 11px;
+      color: #6c7086;
+      font-family: monospace;
+      margin-bottom: 4px;
     }
-    .sha-row { display: flex; align-items: center; gap: 4px; }
-    .sha { font-family: monospace; color: #f9e2af; }
+    .sha { color: #f9e2af; }
     .copy-btn {
-      font-size: 12px;
+      font-size: 11px;
       background: none;
       border: 1px solid #45475a;
       border-radius: 3px;
-      color: #9399b2;
-      padding: 0 4px;
+      color: #6c7086;
+      padding: 0 3px;
       cursor: pointer;
-      line-height: 1.4;
+      line-height: 1.3;
     }
     .copy-btn:hover { color: #cdd6f4; border-color: #6c7086; }
-    .parents {
-      font-size: 12px;
-      color: #9399b2;
-      margin-top: 4px;
-    }
-    .parent-sha {
+    .sep { color: #45475a; }
+    .author { color: #9399b2; }
+    .date { color: #6c7086; }
+    .label { color: #45475a; }
+    .parent-sha { color: #f9e2af; margin-left: 2px; }
+    .files-row { display: flex; flex-wrap: wrap; gap: 4px; }
+    .file-chip {
       font-family: monospace;
-      color: #f9e2af;
-      margin-left: 6px;
-    }
-    .file-entry {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 3px 0;
-      font-size: 13px;
-    }
-    .status-badge {
       font-size: 11px;
-      padding: 1px 6px;
+      color: #9399b2;
+      background: #181825;
+      border: 1px solid #313244;
       border-radius: 3px;
-      background: #313244;
-      min-width: 60px;
-      text-align: center;
+      padding: 1px 5px;
+      white-space: nowrap;
     }
-    .added .status-badge { color: #a6e3a1; }
-    .modified .status-badge { color: #f9e2af; }
-    .deleted .status-badge { color: #f38ba8; }
-    .file-path { font-family: monospace; color: #cdd6f4; font-size: 12px; }
+    .file-chip .file-status { margin-right: 3px; font-weight: 700; }
+    .file-chip.added .file-status { color: #a6e3a1; }
+    .file-chip.modified .file-status { color: #f9e2af; }
+    .file-chip.deleted .file-status { color: #f38ba8; }
+    .diff-section {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
     .diff {
+      flex: 1;
+      min-height: 0;
       background: #181825;
       border: 1px solid #313244;
       border-radius: 6px;
-      padding: 12px;
-      overflow-x: auto;
+      padding: 8px 12px;
+      overflow: auto;
       font-size: 12px;
       line-height: 1.5;
       color: #cdd6f4;
       white-space: pre;
-      max-height: 500px;
-      overflow-y: auto;
+      margin: 0;
     }
     .diff .added { color: #a6e3a1; background: rgba(166,227,161,0.08); display: block; }
     .diff .removed { color: #f38ba8; background: rgba(243,139,168,0.08); display: block; }
-    .diff .header { color: #89b4fa; display: block; }
+    .diff .file-header { color: #45475a; font-size: 10px; line-height: 1.1; display: block; }
+    .diff .hunk-header { color: #6c7086; font-size: 11px; line-height: 1.3; display: block; }
     .diff .neutral { display: block; }
   `]
 })
@@ -147,7 +160,8 @@ export class CommitDetailComponent implements OnChanges {
       let type: DiffLine['type'] = 'neutral';
       if (text.startsWith('+') && !text.startsWith('+++')) type = 'added';
       else if (text.startsWith('-') && !text.startsWith('---')) type = 'removed';
-      else if (text.startsWith('@@') || text.startsWith('diff ') || text.startsWith('index ') || text.startsWith('+++') || text.startsWith('---')) type = 'header';
+      else if (text.startsWith('@@')) type = 'hunk-header';
+      else if (text.startsWith('diff ') || text.startsWith('index ') || text.startsWith('+++') || text.startsWith('---')) type = 'file-header';
       return { text, type };
     });
   }

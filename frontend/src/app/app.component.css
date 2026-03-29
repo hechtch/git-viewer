@@ -90,5 +90,23 @@
 
 .tab-content {
   flex: 1;
-  overflow-y: auto;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.commit-log-panel {
+  max-height: 45vh;
+  overflow: auto;
+  flex-shrink: 0;
+  border-bottom: 1px solid #313244;
+}
+
+.commit-detail-panel {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }

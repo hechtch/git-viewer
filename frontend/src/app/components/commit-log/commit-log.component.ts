@@ -1,5 +1,6 @@
 import { Component, Input, Output, EventEmitter, OnChanges } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { GitApiService, BranchInfo, CommitSummary, GraphEntry } from '../../services/git-api.service';
 import { CommitGraphComponent } from '../commit-graph/commit-graph.component';
 
@@ -10,7 +11,7 @@ interface CommitRow extends CommitSummary {
 @Component({
   selector: 'app-commit-log',
   standalone: true,
-  imports: [CommonModule, CommitGraphComponent],
+  imports: [CommonModule, FormsModule, CommitGraphComponent],
   template: `
     <div class="commit-log">
       <div class="log-header">
@@ -18,10 +19,25 @@ interface CommitRow extends CommitSummary {
           Commits on <span class="branch-name">{{ branch }}</span>
         </span>
         <span *ngIf="!branch" class="viewing-label">All branches</span>
-        <span class="count" *ngIf="commits.length">{{ commits.length }}</span>
+        <span class="count" *ngIf="branch && filteredCommits.length !== commits.length">
+          {{ filteredCommits.length }}/{{ commits.length }}
+        </span>
+        <span class="count" *ngIf="branch && filteredCommits.length === commits.length && commits.length">
+          {{ commits.length }}
+        </span>
         <button *ngIf="!branch" class="toggle-merged-btn" (click)="showMerged = !showMerged">
           {{ showMerged ? 'Hide merged' : 'Show merged' }}
         </button>
+      </div>
+      <div class="search-row">
+        <input
+          class="search-input"
+          type="text"
+          placeholder="Search commits… (regex ok)"
+          [(ngModel)]="searchQuery"
+          (ngModelChange)="onSearchChange()"
+        />
+        <span *ngIf="searchError" class="search-error">{{ searchError }}</span>
       </div>
 
       <!-- Graph view for "All branches" -->
@@ -35,7 +51,7 @@ interface CommitRow extends CommitSummary {
       <!-- Flat list for single branch -->
       <ng-container *ngIf="branch">
         <div
-          *ngFor="let c of commits"
+          *ngFor="let c of filteredCommits"
           class="commit-row"
           [class.selected]="c.sha === selectedSha"
           [class.merge]="c.parents.length > 1"
@@ -56,7 +72,9 @@ interface CommitRow extends CommitSummary {
         </div>
       </ng-container>
 
-      <div *ngIf="branch && commits.length === 0" class="empty">No commits found</div>
+      <div *ngIf="branch && filteredCommits.length === 0" class="empty">
+        {{ commits.length ? 'No matches' : 'No commits found' }}
+      </div>
     </div>
   `,
   styles: [`
@@ -139,6 +157,26 @@ interface CommitRow extends CommitSummary {
       cursor: pointer;
     }
     .toggle-merged-btn:hover { color: #cdd6f4; border-color: #6c7086; }
+    .search-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .search-input {
+      flex: 1;
+      background: #181825;
+      border: 1px solid #313244;
+      border-radius: 4px;
+      color: #cdd6f4;
+      font-size: 12px;
+      padding: 4px 8px;
+      outline: none;
+      font-family: monospace;
+    }
+    .search-input:focus { border-color: #89b4fa; }
+    .search-input::placeholder { color: #45475a; }
+    .search-error { font-size: 11px; color: #f38ba8; }
   `]
 })
 export class CommitLogComponent implements OnChanges {
@@ -152,6 +190,33 @@ export class CommitLogComponent implements OnChanges {
   currentBranch = '';
   selectedSha = '';
   showMerged = false;
+  searchQuery = '';
+  searchError = '';
+  private searchRegex: RegExp | null = null;
+
+  onSearchChange() {
+    this.searchError = '';
+    if (!this.searchQuery) {
+      this.searchRegex = null;
+      return;
+    }
+    try {
+      this.searchRegex = new RegExp(this.searchQuery, 'i');
+    } catch {
+      this.searchError = 'invalid regex';
+      this.searchRegex = null;
+    }
+  }
+
+  private matchesSearch(message: string, author: string, sha: string): boolean {
+    if (!this.searchRegex) return true;
+    return this.searchRegex.test(message) || this.searchRegex.test(author) || this.searchRegex.test(sha);
+  }
+
+  get filteredCommits(): CommitRow[] {
+    if (!this.searchRegex) return this.commits;
+    return this.commits.filter(c => this.matchesSearch(c.message, c.author, c.sha));
+  }
 
   get mergedNames(): Set<string> {
     return new Set(
@@ -170,7 +235,6 @@ export class CommitLogComponent implements OnChanges {
   get visibleGraphEntries(): GraphEntry[] {
     if (this.showMerged) return this.graphEntries;
     const merged = this.mergedNames;
-    // Strip merged-branch refs from entries so their lanes disappear from the layout
     return this.graphEntries.map(e => ({
       ...e,
       refs: e.refs.filter(r => !merged.has(r.replace('HEAD -> ', ''))),
