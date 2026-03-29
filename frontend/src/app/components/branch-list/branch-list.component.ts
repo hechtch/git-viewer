@@ -35,11 +35,11 @@ import { GitApiService, BranchInfo } from '../../services/git-api.service';
               @if ((b.ahead ?? -1) === 0) {
                 <span class="merged">merged</span>
               }
-              @if (b.ahead > 0) {
+              @if ((b.ahead ?? 0) > 0) {
                 <span class="ahead-behind">
-                  <span class="ahead" [title]="'commits ahead of ' + currentBranch">▲{{ b.ahead }}</span>
-                  @if (b.behind > 0) {
-                    <span class="behind" [title]="'commits behind ' + currentBranch">▼{{ b.behind }}</span>
+                  <span class="ahead" [title]="'commits ahead of trunk'">▲{{ b.ahead }}</span>
+                  @if ((b.behind ?? 0) > 0) {
+                    <span class="behind" [title]="'commits behind trunk'">▼{{ b.behind }}</span>
                   }
                 </span>
               }

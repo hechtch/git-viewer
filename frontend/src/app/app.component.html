@@ -20,9 +20,25 @@
       </aside>
       <main class="content" [style.--text-zoom]="contentZoom">
         <div class="tab-bar">
+          <button [class.active]="activeTab === 'timeline'" (click)="activeTab = 'timeline'">Timeline</button>
           <button [class.active]="activeTab === 'commits'" (click)="activeTab = 'commits'">Commits</button>
           <button [class.active]="activeTab === 'files'" (click)="activeTab = 'files'">Files</button>
         </div>
+        @if (activeTab === 'timeline') {
+          <div class="tab-content">
+            <div class="commit-log-panel">
+              <app-commit-log
+                [branch]="null"
+                [repoPath]="repoPath"
+                [jumpToBranch]="selectedBranch"
+                (commitSelected)="onCommitSelected($event)">
+              </app-commit-log>
+            </div>
+            <div class="commit-detail-panel">
+              <app-commit-detail [sha]="selectedCommit"></app-commit-detail>
+            </div>
+          </div>
+        }
         @if (activeTab === 'commits') {
           <div class="tab-content">
             <div class="commit-log-panel">

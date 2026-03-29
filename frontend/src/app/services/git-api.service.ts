@@ -8,8 +8,8 @@ export interface BranchInfo {
   sha: string;
   date: string;
   subject: string;
-  ahead: number;
-  behind: number;
+  ahead?: number;  // undefined for the trunk branch itself
+  behind?: number; // undefined for the trunk branch itself
 }
 
 export interface BranchesResponse {

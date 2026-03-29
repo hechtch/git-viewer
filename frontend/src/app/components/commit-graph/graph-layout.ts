@@ -58,16 +58,22 @@ export function computeLayout(entries: GraphEntry[]): LayoutNode[] {
     return a.idx - b.idx;
   });
 
+  // Set of tip SHAs so we don't consume another branch's starting commit
+  const tipShas = new Set(tips.map(t => entries[t.idx].sha));
+
   let nextCol = 0;
   for (const tip of tips) {
     const col = nextCol++;
-    // Trace first-parent chain from this tip
+    // Trace first-parent chain from this tip, stopping before another branch's tip
     let sha = entries[tip.idx].sha;
+    let isFirst = true;
     while (sha) {
       if (branchOf.has(sha)) break; // already claimed by an earlier branch
+      if (!isFirst && tipShas.has(sha)) break; // don't absorb another branch's tip
       branchOf.set(sha, col);
-      const entry = entries[shaToIdx.get(sha)!];
+      const entry = entries[shaToIdx.get(sha) ?? 0];
       sha = entry.parents.length > 0 ? entry.parents[0] : '';
+      isFirst = false;
     }
   }
 

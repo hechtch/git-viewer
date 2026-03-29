@@ -39,12 +39,18 @@ export class GitService {
       return { name, sha, date, subject: rest.join('\t') };
     });
 
-    // Compute ahead/behind relative to default branch (current branch)
-    const baseBranch = current || parsed[0]?.name;
+    // Compute ahead/behind relative to the stable trunk branch, not the current checkout.
+    // This way "merged" means "merged into master/main", regardless of what's checked out.
+    const preferredBases = ['master', 'main', 'develop'];
+    const baseBranch = preferredBases.find(n => parsed.some(b => b.name === n))
+      || current
+      || parsed[0]?.name;
+
     const branches: BranchInfo[] = await Promise.all(
       parsed.map(async (b) => {
         if (!baseBranch || b.name === baseBranch) {
-          return { ...b, ahead: 0, behind: 0 };
+          // Base branch itself — omit ahead/behind so it's never shown as "merged"
+          return { ...b };
         }
         try {
           const counts = await this.git(
@@ -213,8 +219,8 @@ export interface BranchInfo {
   sha: string;
   date: string;
   subject: string;
-  ahead: number;
-  behind: number;
+  ahead?: number;  // undefined for the trunk branch itself
+  behind?: number; // undefined for the trunk branch itself
 }
 
 export interface CommitSummary {

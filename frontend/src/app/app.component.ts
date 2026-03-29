@@ -45,7 +45,7 @@ export class AppComponent implements OnInit {
 
   selectedBranch: string | null = null;
   selectedCommit: string | null = null;
-  activeTab: 'commits' | 'files' = 'commits';
+  activeTab: 'timeline' | 'commits' | 'files' = 'timeline';
 
   ngOnInit(): void {
     this.api.getRepo().subscribe({
@@ -75,6 +75,7 @@ export class AppComponent implements OnInit {
   onBranchSelected(branch: string | null): void {
     this.selectedBranch = branch;
     this.selectedCommit = null;
+    this.activeTab = 'timeline';
   }
 
   onCommitSelected(sha: string): void {

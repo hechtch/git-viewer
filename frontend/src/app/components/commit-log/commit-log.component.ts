@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnChanges, inject } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { GitApiService, BranchInfo, CommitSummary, GraphEntry } from '../../services/git-api.service';
@@ -56,6 +56,8 @@ interface CommitRow extends CommitSummary {
         <app-commit-graph
           [entries]="visibleGraphEntries"
           [branches]="visibleBranchInfos"
+          [showMerged]="showMerged"
+          [jumpToBranch]="jumpToBranch"
           (commitSelected)="selectCommit($event)">
         </app-commit-graph>
       }
@@ -203,6 +205,7 @@ export class CommitLogComponent implements OnChanges {
 
   @Input() branch: string | null = null;
   @Input() repoPath: string | null = null;
+  @Input() jumpToBranch: string | null = null;
   @Output() commitSelected = new EventEmitter<string>();
 
   commits: CommitRow[] = [];
@@ -210,7 +213,7 @@ export class CommitLogComponent implements OnChanges {
   branchInfos: BranchInfo[] = [];
   currentBranch = '';
   selectedSha = '';
-  showMerged = false;
+  showMerged = true;
   searchQuery = '';
   searchError = '';
   private searchRegex: RegExp | null = null;
@@ -254,19 +257,16 @@ export class CommitLogComponent implements OnChanges {
   }
 
   get visibleGraphEntries(): GraphEntry[] {
-    if (this.showMerged) return this.graphEntries;
-    const merged = this.mergedNames;
-    return this.graphEntries.map(e => ({
-      ...e,
-      refs: e.refs.filter(r => !merged.has(r.replace('HEAD -> ', ''))),
-    }));
+    return this.graphEntries;
   }
 
   // sha -> refs map built from graph data
   private refMap = new Map<string, string[]>();
 
-  ngOnChanges(): void {
-    this.loadCommits();
+  ngOnChanges(changes: SimpleChanges): void {
+    if (changes['branch'] || changes['repoPath']) {
+      this.loadCommits();
+    }
   }
 
   loadCommits(): void {

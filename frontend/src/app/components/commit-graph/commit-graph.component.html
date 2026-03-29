@@ -5,13 +5,14 @@
     </div>
   }
 </div>
-<div class="graph-container">
+<div class="graph-container" [class.show-hover]="showMouseHover" (mousemove)="onMouseMove()">
   <!-- Pinned lane labels on the left -->
   <div class="lane-labels" [style.height.px]="svgHeight * zoom">
     @for (lane of laneLabels; track lane) {
       <div
         class="lane-label-row"
         [class.lane-label-row-selected]="lane.col === selectedCol"
+        [class.lane-label-row-hidden]="!showMerged && lane.merged"
         [style.top.px]="(nodeY(lane.col) - LANE_HEIGHT / 2) * zoom"
         [style.height.px]="LANE_HEIGHT * zoom">
         <span
@@ -51,6 +52,7 @@
             fill="transparent"
             class="lane-hit-target"
             [class.lane-selected]="lane.col === selectedCol"
+            [class.lane-merged-hidden]="!showMerged && lane.merged"
             />
         }
       </g>

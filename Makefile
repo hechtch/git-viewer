@@ -1,4 +1,4 @@
-CONTAINER_RUNTIME ?= docker
+CONTAINER_RUNTIME ?= podman
 
 # Override with: make run GIT_REPO_PATH=/path/to/repo
 GIT_REPO_PATH ?= ../sample-project

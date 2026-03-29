@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnChanges, HostListener, ViewChild, ElementRef } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, HostListener, ViewChild, ElementRef, inject } from '@angular/core';
 
 import { BranchInfo, GraphEntry } from '../../services/git-api.service';
 import { computeLayout, LayoutNode, LayoutEdge } from './graph-layout';
@@ -30,6 +30,7 @@ export interface LaneLabel {
   name: string;
   col: number;
   color: string;
+  merged?: boolean;
 }
 
 @Component({
@@ -41,6 +42,8 @@ export interface LaneLabel {
 export class CommitGraphComponent implements OnChanges {
   @Input() entries: GraphEntry[] = [];
   @Input() branches: BranchInfo[] = [];
+  @Input() showMerged = true;
+  @Input() jumpToBranch: string | null = null;
   @Output() commitSelected = new EventEmitter<string>();
 
   readonly COMMIT_SPACING = 60;
@@ -51,6 +54,7 @@ export class CommitGraphComponent implements OnChanges {
   readonly BADGE_PAD = 12;
 
   @ViewChild('graphScroll') graphScrollRef: ElementRef<HTMLElement> | undefined;
+  private hostEl = inject(ElementRef<HTMLElement>);
 
   renderNodes: RenderNode[] = [];
   allEdges: RenderEdge[] = [];
@@ -74,18 +78,50 @@ export class CommitGraphComponent implements OnChanges {
 
   private _maxCol = 0;
   private toastTimer: ReturnType<typeof setTimeout> | null = null;
+  private mouseInactivityTimer: ReturnType<typeof setTimeout> | null = null;
 
-  ngOnChanges(): void {
-    const nodes = computeLayout(this.entries);
-    this._maxCol = 0;
-    for (const n of nodes) {
-      if (n.col > this._maxCol) this._maxCol = n.col;
+  mouseActive = false;
+  usingKeyboard = false;
+
+  get showMouseHover(): boolean {
+    return this.mouseActive && !this.usingKeyboard;
+  }
+
+  onMouseMove(): void {
+    if (this.usingKeyboard) this.usingKeyboard = false;
+    if (!this.mouseActive) this.mouseActive = true;
+    if (this.mouseInactivityTimer) clearTimeout(this.mouseInactivityTimer);
+    this.mouseInactivityTimer = setTimeout(() => {
+      this.mouseActive = false;
+    }, 2000);
+  }
+
+  ngOnChanges(changes: SimpleChanges): void {
+    if (changes['entries'] || changes['branches'] || changes['showMerged']) {
+      const nodes = computeLayout(this.entries);
+      this._maxCol = 0;
+      for (const n of nodes) {
+        if (n.col > this._maxCol) this._maxCol = n.col;
+      }
+      this.buildRenderNodes(nodes);
+      this.buildLaneLabels(nodes);
+      this.buildEdges();
+      this.computeDimensions();
+      this.buildChildrenMap();
     }
-    this.buildRenderNodes(nodes);
-    this.buildLaneLabels(nodes);
-    this.buildEdges();
-    this.computeDimensions();
-    this.buildChildrenMap();
+    if (this.jumpToBranch) {
+      this.jumpToNamedBranch(this.jumpToBranch);
+    }
+  }
+
+  private jumpToNamedBranch(name: string): void {
+    const node = this.renderNodes.find(n =>
+      n.entry.refs.some(r => r.replace('HEAD -> ', '') === name)
+    );
+    if (node) {
+      this.selectNode(node);
+      setTimeout(() => this.scrollToNode(node));
+    }
   }
 
   /** X position: commit index → horizontal position (oldest on left, newest on right) */
@@ -178,6 +214,12 @@ export class CommitGraphComponent implements OnChanges {
     }
 
     if (target) {
+      this.usingKeyboard = true;
+      this.mouseActive = false;
+      if (this.mouseInactivityTimer) {
+        clearTimeout(this.mouseInactivityTimer);
+        this.mouseInactivityTimer = null;
+      }
       this.selectNode(target);
       this.scrollToNode(target);
     } else if (event.key === 'ArrowRight') {
@@ -206,12 +248,30 @@ export class CommitGraphComponent implements OnChanges {
   }
 
   private scrollToNode(node: RenderNode): void {
+    // Horizontal: center the node in the graph-scroll container
     const el = this.graphScrollRef?.nativeElement;
-    if (!el) return;
-    const x = this.nodeX(node.row);
-    const halfView = el.clientWidth / 2;
-    const target = x - halfView;
-    el.scrollTo({ left: Math.max(0, target), behavior: 'smooth' });
+    if (el) {
+      const x = this.nodeX(node.row);
+      el.scrollTo({ left: Math.max(0, x - el.clientWidth / 2), behavior: 'smooth' });
+    }
+
+    // Vertical: find the nearest scrollable ancestor and center the node's lane
+    const hostEl = this.hostEl.nativeElement as HTMLElement;
+    let scrollParent: HTMLElement | null = hostEl.parentElement;
+    while (scrollParent) {
+      const style = window.getComputedStyle(scrollParent);
+      const ov = style.overflow + ' ' + style.overflowY;
+      if (ov.includes('auto') || ov.includes('scroll')) {
+        const nodeY = this.nodeY(node.col) * this.zoom;
+        const hostRect = hostEl.getBoundingClientRect();
+        const parentRect = scrollParent.getBoundingClientRect();
+        const graphTopInParent = hostRect.top - parentRect.top + scrollParent.scrollTop;
+        const target = graphTopInParent + nodeY - scrollParent.clientHeight / 2;
+        scrollParent.scrollTo({ top: Math.max(0, target), behavior: 'smooth' });
+        break;
+      }
+      scrollParent = scrollParent.parentElement;
+    }
   }
 
   /** Move up (dir=-1) or down (dir=+1) by visual lane.
@@ -287,12 +347,16 @@ export class CommitGraphComponent implements OnChanges {
   }
 
   private buildLaneLabels(nodes: LayoutNode[]): void {
+    const mergedSet = new Set(
+      this.branches.filter(b => (b.ahead ?? -1) === 0).map(b => b.name)
+    );
     const labelMap = new Map<number, LaneLabel>();
     for (const node of nodes) {
       if (labelMap.has(node.col)) continue;
       if (node.entry.refs.length > 0) {
         const name = node.entry.refs[0].replace('HEAD -> ', '');
-        labelMap.set(node.col, { name, col: node.col, color: node.color });
+        const merged = mergedSet.has(name);
+        labelMap.set(node.col, { name, col: node.col, color: node.color, merged });
       }
     }
     // Ensure every lane gets a label

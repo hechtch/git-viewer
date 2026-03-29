@@ -57,6 +57,14 @@
   background: rgba(69, 71, 90, 0.35);
 }
 
+.lane-label-row-hidden {
+  opacity: 0.25;
+}
+
+.lane-merged-hidden {
+  opacity: 0.25;
+}
+
 .lane-label {
   font-size: 12px;
   font-family: monospace;
@@ -88,7 +96,7 @@
   pointer-events: all;
 }
 
-.lane-hit-target:hover {
+.show-hover .lane-hit-target:hover {
   fill: rgba(49, 50, 68, 0.3);
 }
 
@@ -100,7 +108,7 @@
   cursor: pointer;
 }
 
-.hit-target:hover {
+.show-hover .hit-target:hover {
   fill: rgba(49, 50, 68, 0.6);
 }
 
