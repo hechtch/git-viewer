@@ -1,18 +1,35 @@
-import { Component, OnInit, HostListener } from '@angular/core';
+import { Component, OnInit, HostListener, inject } from '@angular/core';
 import { GitApiService } from './services/git-api.service';
+import { RepoSelectorComponent } from './components/repo-selector/repo-selector.component';
+import { RepoStatusComponent } from './components/repo-status/repo-status.component';
+import { BranchListComponent } from './components/branch-list/branch-list.component';
+import { CommitLogComponent } from './components/commit-log/commit-log.component';
+import { CommitDetailComponent } from './components/commit-detail/commit-detail.component';
+import { FileTreeComponent } from './components/file-tree/file-tree.component';
 
 @Component({
-  selector: 'app-root',
-  templateUrl: './app.component.html',
-  styleUrls: ['./app.component.css'],
+    selector: 'app-root',
+    templateUrl: './app.component.html',
+    styleUrls: ['./app.component.css'],
+    standalone: true,
+    imports: [
+        RepoSelectorComponent,
+        RepoStatusComponent,
+        BranchListComponent,
+        CommitLogComponent,
+        CommitDetailComponent,
+        FileTreeComponent,
+    ]
 })
 export class AppComponent implements OnInit {
+  private api = inject(GitApiService);
+
   repoPath: string | null = null;
   showSelector = false;
   contentZoom = 1.0;
 
   @HostListener('document:keydown', ['$event'])
-  onKeyDown(event: KeyboardEvent) {
+  onKeyDown(event: KeyboardEvent): void {
     if (!(event.ctrlKey || event.metaKey)) return;
     if (event.key === '=' || event.key === '+') {
       event.preventDefault();
@@ -30,9 +47,7 @@ export class AppComponent implements OnInit {
   selectedCommit: string | null = null;
   activeTab: 'commits' | 'files' = 'commits';
 
-  constructor(private api: GitApiService) {}
-
-  ngOnInit() {
+  ngOnInit(): void {
     this.api.getRepo().subscribe({
       next: (info) => {
         this.repoPath = info.path;
@@ -44,7 +59,7 @@ export class AppComponent implements OnInit {
     });
   }
 
-  onRepoOpened(path: string) {
+  onRepoOpened(path: string): void {
     if (path) {
       this.repoPath = path;
       this.selectedBranch = null;
@@ -53,16 +68,16 @@ export class AppComponent implements OnInit {
     this.showSelector = false;
   }
 
-  openSelector() {
+  openSelector(): void {
     this.showSelector = true;
   }
 
-  onBranchSelected(branch: string | null) {
+  onBranchSelected(branch: string | null): void {
     this.selectedBranch = branch;
     this.selectedCommit = null;
   }
 
-  onCommitSelected(sha: string) {
+  onCommitSelected(sha: string): void {
     this.selectedCommit = sha;
   }
 

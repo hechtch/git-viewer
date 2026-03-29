@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnChanges } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnChanges, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { GitApiService, BranchInfo, CommitSummary, GraphEntry } from '../../services/git-api.service';
@@ -9,25 +9,34 @@ interface CommitRow extends CommitSummary {
 }
 
 @Component({
-  selector: 'app-commit-log',
-  standalone: true,
-  imports: [CommonModule, FormsModule, CommitGraphComponent],
-  template: `
+    selector: 'app-commit-log',
+    imports: [CommonModule, FormsModule, CommitGraphComponent],
+    template: `
     <div class="commit-log">
       <div class="log-header">
-        <span *ngIf="branch" class="viewing-label">
-          Commits on <span class="branch-name">{{ branch }}</span>
-        </span>
-        <span *ngIf="!branch" class="viewing-label">All branches</span>
-        <span class="count" *ngIf="branch && filteredCommits.length !== commits.length">
-          {{ filteredCommits.length }}/{{ commits.length }}
-        </span>
-        <span class="count" *ngIf="branch && filteredCommits.length === commits.length && commits.length">
-          {{ commits.length }}
-        </span>
-        <button *ngIf="!branch" class="toggle-merged-btn" (click)="showMerged = !showMerged">
-          {{ showMerged ? 'Hide merged' : 'Show merged' }}
-        </button>
+        @if (branch) {
+          <span class="viewing-label">
+            Commits on <span class="branch-name">{{ branch }}</span>
+          </span>
+        }
+        @if (!branch) {
+          <span class="viewing-label">All branches</span>
+        }
+        @if (branch && filteredCommits.length !== commits.length) {
+          <span class="count">
+            {{ filteredCommits.length }}/{{ commits.length }}
+          </span>
+        }
+        @if (branch && filteredCommits.length === commits.length && commits.length) {
+          <span class="count">
+            {{ commits.length }}
+          </span>
+        }
+        @if (!branch) {
+          <button class="toggle-merged-btn" (click)="showMerged = !showMerged">
+            {{ showMerged ? 'Hide merged' : 'Show merged' }}
+          </button>
+        }
       </div>
       <div class="search-row">
         <input
@@ -36,48 +45,57 @@ interface CommitRow extends CommitSummary {
           placeholder="Search commits… (regex ok)"
           [(ngModel)]="searchQuery"
           (ngModelChange)="onSearchChange()"
-        />
-        <span *ngIf="searchError" class="search-error">{{ searchError }}</span>
+          />
+        @if (searchError) {
+          <span class="search-error">{{ searchError }}</span>
+        }
       </div>
-
+    
       <!-- Graph view for "All branches" -->
-      <app-commit-graph
-        *ngIf="!branch && visibleGraphEntries.length"
-        [entries]="visibleGraphEntries"
-        [branches]="visibleBranchInfos"
-        (commitSelected)="selectCommit($event)">
-      </app-commit-graph>
-
+      @if (!branch && visibleGraphEntries.length) {
+        <app-commit-graph
+          [entries]="visibleGraphEntries"
+          [branches]="visibleBranchInfos"
+          (commitSelected)="selectCommit($event)">
+        </app-commit-graph>
+      }
+    
       <!-- Flat list for single branch -->
-      <ng-container *ngIf="branch">
-        <div
-          *ngFor="let c of filteredCommits"
-          class="commit-row"
-          [class.selected]="c.sha === selectedSha"
-          [class.merge]="c.parents.length > 1"
-          (click)="selectCommit(c.sha)">
-
-          <div class="commit-main">
-            <span class="short-hash">{{ c.short }}</span>
-            <span class="message">{{ c.message }}</span>
+      @if (branch) {
+        @for (c of filteredCommits; track c) {
+          <div
+            class="commit-row"
+            [class.selected]="c.sha === selectedSha"
+            [class.merge]="c.parents.length > 1"
+            tabindex="0"
+            role="button"
+            (click)="selectCommit(c.sha)"
+            (keydown.enter)="selectCommit(c.sha)">
+            <div class="commit-main">
+              <span class="short-hash">{{ c.short }}</span>
+              <span class="message">{{ c.message }}</span>
+            </div>
+            <div class="commit-meta">
+              @for (ref of c.refs; track ref) {
+                <span class="ref-badge" [class.head-badge]="ref.startsWith('HEAD')">
+                  {{ ref.replace('HEAD -> ', '') }}
+                </span>
+              }
+              <span class="author">{{ c.author }}</span>
+              <span class="date">{{ c.date | date:'MMM d' }}</span>
+            </div>
           </div>
-
-          <div class="commit-meta">
-            <span *ngFor="let ref of c.refs" class="ref-badge" [class.head-badge]="ref.startsWith('HEAD')">
-              {{ ref.replace('HEAD -> ', '') }}
-            </span>
-            <span class="author">{{ c.author }}</span>
-            <span class="date">{{ c.date | date:'MMM d' }}</span>
-          </div>
+        }
+      }
+    
+      @if (branch && filteredCommits.length === 0) {
+        <div class="empty">
+          {{ commits.length ? 'No matches' : 'No commits found' }}
         </div>
-      </ng-container>
-
-      <div *ngIf="branch && filteredCommits.length === 0" class="empty">
-        {{ commits.length ? 'No matches' : 'No commits found' }}
-      </div>
+      }
     </div>
-  `,
-  styles: [`
+    `,
+    styles: [`
     .commit-log { padding: 12px; }
     .log-header {
       display: flex;
@@ -181,6 +199,8 @@ interface CommitRow extends CommitSummary {
   `]
 })
 export class CommitLogComponent implements OnChanges {
+  private api = inject(GitApiService);
+
   @Input() branch: string | null = null;
   @Input() repoPath: string | null = null;
   @Output() commitSelected = new EventEmitter<string>();
@@ -195,7 +215,7 @@ export class CommitLogComponent implements OnChanges {
   searchError = '';
   private searchRegex: RegExp | null = null;
 
-  onSearchChange() {
+  onSearchChange(): void {
     this.searchError = '';
     if (!this.searchQuery) {
       this.searchRegex = null;
@@ -245,13 +265,11 @@ export class CommitLogComponent implements OnChanges {
   // sha -> refs map built from graph data
   private refMap = new Map<string, string[]>();
 
-  constructor(private api: GitApiService) {}
-
-  ngOnChanges() {
+  ngOnChanges(): void {
     this.loadCommits();
   }
 
-  loadCommits() {
+  loadCommits(): void {
     this.api.getGraph().subscribe(graph => {
       this.graphEntries = graph;
       this.refMap.clear();
@@ -268,8 +286,9 @@ export class CommitLogComponent implements OnChanges {
     });
   }
 
-  fetchCommits() {
-    this.api.getCommits(this.branch!).subscribe(commits => {
+  fetchCommits(): void {
+    if (!this.branch) return;
+    this.api.getCommits(this.branch).subscribe(commits => {
       this.commits = commits.map(c => ({
         ...c,
         refs: this.refMap.get(c.sha) ?? [],
@@ -277,7 +296,7 @@ export class CommitLogComponent implements OnChanges {
     });
   }
 
-  selectCommit(sha: string) {
+  selectCommit(sha: string): void {
     this.selectedSha = sha;
     this.commitSelected.emit(sha);
   }

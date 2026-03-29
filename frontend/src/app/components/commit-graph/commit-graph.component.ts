@@ -1,5 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnChanges, HostListener, ViewChild, ElementRef } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { BranchInfo, GraphEntry } from '../../services/git-api.service';
 import { computeLayout, LayoutNode, LayoutEdge } from './graph-layout';
 
@@ -33,11 +33,10 @@ export interface LaneLabel {
 }
 
 @Component({
-  selector: 'app-commit-graph',
-  standalone: true,
-  imports: [CommonModule],
-  templateUrl: './commit-graph.component.html',
-  styleUrls: ['./commit-graph.component.css'],
+    selector: 'app-commit-graph',
+    imports: [],
+    templateUrl: './commit-graph.component.html',
+    styleUrls: ['./commit-graph.component.css']
 })
 export class CommitGraphComponent implements OnChanges {
   @Input() entries: GraphEntry[] = [];
@@ -51,7 +50,7 @@ export class CommitGraphComponent implements OnChanges {
   readonly CHAR_WIDTH = 7;
   readonly BADGE_PAD = 12;
 
-  @ViewChild('graphScroll') graphScrollRef!: ElementRef<HTMLElement>;
+  @ViewChild('graphScroll') graphScrollRef: ElementRef<HTMLElement> | undefined;
 
   renderNodes: RenderNode[] = [];
   allEdges: RenderEdge[] = [];
@@ -74,9 +73,9 @@ export class CommitGraphComponent implements OnChanges {
   readonly ZOOM_STEP = 0.15;
 
   private _maxCol = 0;
-  private toastTimer: any = null;
+  private toastTimer: ReturnType<typeof setTimeout> | null = null;
 
-  ngOnChanges() {
+  ngOnChanges(): void {
     const nodes = computeLayout(this.entries);
     this._maxCol = 0;
     for (const n of nodes) {
@@ -100,7 +99,7 @@ export class CommitGraphComponent implements OnChanges {
     return col * this.LANE_HEIGHT + this.MARGIN;
   }
 
-  onCommitClick(sha: string) {
+  onCommitClick(sha: string): void {
     this.selectedSha = sha;
     const node = this.renderNodes.find(n => n.entry.sha === sha);
     this.selectedCol = node ? node.col : -1;
@@ -108,7 +107,7 @@ export class CommitGraphComponent implements OnChanges {
   }
 
   @HostListener('document:keydown', ['$event'])
-  onKeyDown(event: KeyboardEvent) {
+  onKeyDown(event: KeyboardEvent): void {
     if (!this.renderNodes.length) return;
 
     const selected = this.renderNodes.find(n => n.entry.sha === this.selectedSha);
@@ -189,24 +188,24 @@ export class CommitGraphComponent implements OnChanges {
     event.preventDefault();
   }
 
-  private selectNode(node: RenderNode) {
+  private selectNode(node: RenderNode): void {
     this.selectedSha = node.entry.sha;
     this.selectedCol = node.col;
     this.commitSelected.emit(node.entry.sha);
   }
 
-  onWheel(event: WheelEvent) {
+  onWheel(event: WheelEvent): void {
     if (event.ctrlKey || event.metaKey) {
       event.preventDefault();
       this.adjustZoom(event.deltaY < 0 ? this.ZOOM_STEP : -this.ZOOM_STEP);
     }
   }
 
-  adjustZoom(delta: number) {
+  adjustZoom(delta: number): void {
     this.zoom = Math.min(this.MAX_ZOOM, Math.max(this.MIN_ZOOM, +(this.zoom + delta).toFixed(2)));
   }
 
-  private scrollToNode(node: RenderNode) {
+  private scrollToNode(node: RenderNode): void {
     const el = this.graphScrollRef?.nativeElement;
     if (!el) return;
     const x = this.nodeX(node.row);
@@ -252,7 +251,7 @@ export class CommitGraphComponent implements OnChanges {
     return inDir;
   }
 
-  private buildChildrenMap() {
+  private buildChildrenMap(): void {
     this.childrenOf.clear();
     for (const node of this.renderNodes) {
       for (const parentSha of node.entry.parents) {
@@ -263,7 +262,7 @@ export class CommitGraphComponent implements OnChanges {
     }
   }
 
-  private showToast(message: string) {
+  private showToast(message: string): void {
     // Force re-trigger animation by toggling off then on
     this.toastVisible = false;
     if (this.toastTimer) clearTimeout(this.toastTimer);
@@ -287,7 +286,7 @@ export class CommitGraphComponent implements OnChanges {
     return next;
   }
 
-  private buildLaneLabels(nodes: LayoutNode[]) {
+  private buildLaneLabels(nodes: LayoutNode[]): void {
     const labelMap = new Map<number, LaneLabel>();
     for (const node of nodes) {
       if (labelMap.has(node.col)) continue;
@@ -305,7 +304,7 @@ export class CommitGraphComponent implements OnChanges {
     this.laneLabels = [...labelMap.values()].sort((a, b) => a.col - b.col);
   }
 
-  private buildRenderNodes(nodes: LayoutNode[]) {
+  private buildRenderNodes(nodes: LayoutNode[]): void {
     const branchMap = new Map<string, BranchInfo>(
       this.branches.map(b => [b.name, b])
     );
@@ -349,7 +348,7 @@ export class CommitGraphComponent implements OnChanges {
     });
   }
 
-  private buildEdges() {
+  private buildEdges(): void {
     this.allEdges = [];
     for (const node of this.renderNodes) {
       for (const edge of node.edges) {
@@ -375,7 +374,7 @@ export class CommitGraphComponent implements OnChanges {
     return `M ${x1} ${y1} C ${midX} ${y1}, ${midX} ${y2}, ${x2} ${y2}`;
   }
 
-  private computeDimensions() {
+  private computeDimensions(): void {
     this.svgWidth = this.entries.length * this.COMMIT_SPACING + this.MARGIN * 2;
     this.svgHeight = (this._maxCol + 1) * this.LANE_HEIGHT + this.MARGIN * 2;
   }

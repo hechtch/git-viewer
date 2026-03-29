@@ -1,4 +1,4 @@
-import { Injectable } from '@angular/core';
+import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
@@ -73,9 +73,9 @@ export interface BrowseResponse {
 
 @Injectable({ providedIn: 'root' })
 export class GitApiService {
-  private base = '/api';
+  private http = inject(HttpClient);
 
-  constructor(private http: HttpClient) {}
+  private base = '/api';
 
   pickFolder(startPath?: string): Observable<{ path: string } | null> {
     return this.http.post<{ path: string }>(

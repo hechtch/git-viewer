@@ -1,4 +1,4 @@
-import { Component, Input, OnChanges } from '@angular/core';
+import { Component, Input, OnChanges, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { GitApiService, CommitDetail } from '../../services/git-api.service';
 
@@ -8,47 +8,57 @@ interface DiffLine {
 }
 
 @Component({
-  selector: 'app-commit-detail',
-  standalone: true,
-  imports: [CommonModule],
-  template: `
-    <div class="detail" *ngIf="detail">
-      <div class="meta-block">
-        <div class="msg">{{ detail.message }}</div>
-        <div class="meta-row">
-          <span class="sha">{{ detail.sha }}</span>
-          <button class="copy-btn" (click)="copySha(detail.sha)" [title]="'Copy SHA'">{{ copyConfirmed ? '✓' : '⎘' }}</button>
-          <span class="sep">·</span>
-          <span class="author">{{ detail.author }}</span>
-          <span class="sep">·</span>
-          <span class="date">{{ detail.date | date:'MMM d, y, h:mm a' }}</span>
-          <ng-container *ngIf="detail.parents.length">
+    selector: 'app-commit-detail',
+    imports: [CommonModule],
+    template: `
+    @if (detail) {
+      <div class="detail">
+        <div class="meta-block">
+          <div class="msg">{{ detail.message }}</div>
+          <div class="meta-row">
+            <span class="sha">{{ detail.sha }}</span>
+            <button class="copy-btn" (click)="copySha(detail.sha)" [title]="'Copy SHA'">{{ copyConfirmed ? '✓' : '⎘' }}</button>
             <span class="sep">·</span>
-            <span class="label">parent<ng-container *ngIf="detail.parents.length > 1">s</ng-container></span>
-            <span *ngFor="let p of detail.parents" class="parent-sha">{{ p.substring(0, 7) }}</span>
-          </ng-container>
+            <span class="author">{{ detail.author }}</span>
+            <span class="sep">·</span>
+            <span class="date">{{ detail.date | date:'MMM d, y, h:mm a' }}</span>
+            @if (detail.parents.length) {
+              <span class="sep">·</span>
+              <span class="label">parent@if (detail.parents.length > 1) {
+                s
+              }</span>
+              @for (p of detail.parents; track p) {
+                <span class="parent-sha">{{ p.substring(0, 7) }}</span>
+              }
+            }
+          </div>
+          <div class="files-row">
+            @for (f of detail.files; track f) {
+              <span class="file-chip" [class]="f.status">
+                <span class="file-status">{{ f.status[0].toUpperCase() }}</span>{{ f.path }}
+              </span>
+            }
+          </div>
         </div>
-        <div class="files-row">
-          <span *ngFor="let f of detail.files" class="file-chip" [class]="f.status">
-            <span class="file-status">{{ f.status[0].toUpperCase() }}</span>{{ f.path }}
-          </span>
+        <div class="diff-section">
+          <pre class="diff">@for (line of diffLines; track $index) {<span [class]="line.type">{{ line.text }}
+</span>}</pre>
         </div>
       </div>
-
-      <div class="diff-section">
-        <pre class="diff"><ng-container *ngFor="let line of diffLines"><span [class]="line.type">{{ line.text }}
-</span></ng-container></pre>
+    }
+    
+    @if (!detail && !sha) {
+      <div class="placeholder">
+        Select a commit to view details
       </div>
-    </div>
-
-    <div class="placeholder" *ngIf="!detail && !sha">
-      Select a commit to view details
-    </div>
-    <div class="placeholder" *ngIf="!detail && sha">
-      Loading...
-    </div>
-  `,
-  styles: [`
+    }
+    @if (!detail && sha) {
+      <div class="placeholder">
+        Loading...
+      </div>
+    }
+    `,
+    styles: [`
     :host {
       display: flex;
       flex-direction: column;
@@ -148,11 +158,13 @@ interface DiffLine {
   `]
 })
 export class CommitDetailComponent implements OnChanges {
+  private api = inject(GitApiService);
+
   @Input() sha: string | null = null;
 
   detail: CommitDetail | null = null;
   copyConfirmed = false;
-  private copyTimer: any = null;
+  private copyTimer: ReturnType<typeof setTimeout> | null = null;
 
   get diffLines(): DiffLine[] {
     if (!this.detail?.diff) return [];
@@ -166,7 +178,7 @@ export class CommitDetailComponent implements OnChanges {
     });
   }
 
-  copySha(sha: string) {
+  copySha(sha: string): void {
     navigator.clipboard.writeText(sha).then(() => {
       this.copyConfirmed = true;
       if (this.copyTimer) clearTimeout(this.copyTimer);
@@ -174,9 +186,7 @@ export class CommitDetailComponent implements OnChanges {
     });
   }
 
-  constructor(private api: GitApiService) {}
-
-  ngOnChanges() {
+  ngOnChanges(): void {
     if (this.sha) {
       this.detail = null;
       this.api.getCommitDetail(this.sha).subscribe(d => this.detail = d);

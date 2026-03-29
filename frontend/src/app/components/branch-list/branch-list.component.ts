@@ -1,12 +1,11 @@
-import { Component, Input, OnChanges, Output, EventEmitter } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, Input, OnChanges, Output, EventEmitter, inject } from '@angular/core';
+
 import { GitApiService, BranchInfo } from '../../services/git-api.service';
 
 @Component({
-  selector: 'app-branch-list',
-  standalone: true,
-  imports: [CommonModule],
-  template: `
+    selector: 'app-branch-list',
+    imports: [],
+    template: `
     <div class="branch-panel">
       <div class="panel-header">
         <h3>Branches</h3>
@@ -20,30 +19,37 @@ import { GitApiService, BranchInfo } from '../../services/git-api.service';
         (click)="selectAll()">
         All branches
       </button>
-      <button
-        *ngFor="let b of visibleBranches"
-        class="branch-btn"
-        [class.active]="selectedBranch === b.name"
-        [class.current]="b.name === currentBranch"
-        [class.unmerged]="b.name !== currentBranch && (b.ahead ?? -1) > 0"
-        (click)="select(b.name)">
-        <span class="branch-name">{{ b.name }}</span>
-        <span class="branch-status">
-          <ng-container *ngIf="b.name === currentBranch">
-            <span class="current-marker">HEAD</span>
-          </ng-container>
-          <ng-container *ngIf="b.name !== currentBranch">
-            <span *ngIf="(b.ahead ?? -1) === 0" class="merged">merged</span>
-            <span *ngIf="b.ahead > 0" class="ahead-behind">
-              <span class="ahead" [title]="'commits ahead of ' + currentBranch">▲{{ b.ahead }}</span>
-              <span *ngIf="b.behind > 0" class="behind" [title]="'commits behind ' + currentBranch">▼{{ b.behind }}</span>
-            </span>
-          </ng-container>
-        </span>
-      </button>
+      @for (b of visibleBranches; track b) {
+        <button
+          class="branch-btn"
+          [class.active]="selectedBranch === b.name"
+          [class.current]="b.name === currentBranch"
+          [class.unmerged]="b.name !== currentBranch && (b.ahead ?? -1) > 0"
+          (click)="select(b.name)">
+          <span class="branch-name">{{ b.name }}</span>
+          <span class="branch-status">
+            @if (b.name === currentBranch) {
+              <span class="current-marker">HEAD</span>
+            }
+            @if (b.name !== currentBranch) {
+              @if ((b.ahead ?? -1) === 0) {
+                <span class="merged">merged</span>
+              }
+              @if (b.ahead > 0) {
+                <span class="ahead-behind">
+                  <span class="ahead" [title]="'commits ahead of ' + currentBranch">▲{{ b.ahead }}</span>
+                  @if (b.behind > 0) {
+                    <span class="behind" [title]="'commits behind ' + currentBranch">▼{{ b.behind }}</span>
+                  }
+                </span>
+              }
+            }
+          </span>
+        </button>
+      }
     </div>
-  `,
-  styles: [`
+    `,
+    styles: [`
     .branch-panel {
       padding: 12px;
     }
@@ -135,6 +141,8 @@ import { GitApiService, BranchInfo } from '../../services/git-api.service';
   `]
 })
 export class BranchListComponent implements OnChanges {
+  private api = inject(GitApiService);
+
   @Input() repoPath: string | null = null;
   @Output() branchSelected = new EventEmitter<string | null>();
 
@@ -147,13 +155,11 @@ export class BranchListComponent implements OnChanges {
     return this.showMerged ? this.branches : this.branches.filter(b => (b.ahead ?? -1) !== 0 || b.name === this.currentBranch);
   }
 
-  constructor(private api: GitApiService) {}
-
-  ngOnChanges() {
+  ngOnChanges(): void {
     this.loadBranches();
   }
 
-  loadBranches() {
+  loadBranches(): void {
     this.api.getBranches().subscribe(res => {
       this.branches = res.branches;
       this.currentBranch = res.current;
@@ -163,12 +169,12 @@ export class BranchListComponent implements OnChanges {
     });
   }
 
-  select(name: string) {
+  select(name: string): void {
     this.selectedBranch = name;
     this.branchSelected.emit(name);
   }
 
-  selectAll() {
+  selectAll(): void {
     this.selectedBranch = null;
     this.branchSelected.emit(null);
   }

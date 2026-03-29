@@ -1,16 +1,18 @@
-import { Component, Input, Output, EventEmitter } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, Input, Output, EventEmitter, inject } from '@angular/core';
+
 import { FormsModule } from '@angular/forms';
+import { HttpErrorResponse } from '@angular/common/http';
 import { GitApiService } from '../../services/git-api.service';
 
 @Component({
-  selector: 'app-repo-selector',
-  standalone: true,
-  imports: [CommonModule, FormsModule],
-  templateUrl: './repo-selector.component.html',
-  styleUrls: ['./repo-selector.component.css'],
+    selector: 'app-repo-selector',
+    imports: [FormsModule],
+    templateUrl: './repo-selector.component.html',
+    styleUrls: ['./repo-selector.component.css']
 })
 export class RepoSelectorComponent {
+  private api = inject(GitApiService);
+
   @Input() canCancel = false;
   @Input() initialPath = '';
 
@@ -22,9 +24,7 @@ export class RepoSelectorComponent {
   error = '';
   dragOver = false;
 
-  constructor(private api: GitApiService) {}
-
-  pickFolder() {
+  pickFolder(): void {
     this.picking = true;
     this.error = '';
     this.api.pickFolder(this.initialPath || undefined).subscribe({
@@ -42,17 +42,17 @@ export class RepoSelectorComponent {
     });
   }
 
-  onDragOver(event: DragEvent) {
+  onDragOver(event: DragEvent): void {
     event.preventDefault();
     event.stopPropagation();
     this.dragOver = true;
   }
 
-  onDragLeave() {
+  onDragLeave(): void {
     this.dragOver = false;
   }
 
-  onDrop(event: DragEvent) {
+  onDrop(event: DragEvent): void {
     event.preventDefault();
     event.stopPropagation();
     this.dragOver = false;
@@ -60,8 +60,8 @@ export class RepoSelectorComponent {
     const items = event.dataTransfer?.items;
     if (!items) return;
 
-    for (let i = 0; i < items.length; i++) {
-      const entry = items[i].webkitGetAsEntry?.();
+    for (const item of Array.from(items)) {
+      const entry = item.webkitGetAsEntry?.();
       if (entry?.isDirectory) {
         // Browsers can't expose the full OS path from a drop.
         // Populate the text field with the folder name so the user can
@@ -73,11 +73,11 @@ export class RepoSelectorComponent {
     }
   }
 
-  cancel() {
+  cancel(): void {
     this.repoOpened.emit('');
   }
 
-  open() {
+  open(): void {
     const trimmed = this.selectedPath.trim();
     if (!trimmed) return;
     this.loading = true;
@@ -87,9 +87,9 @@ export class RepoSelectorComponent {
         this.loading = false;
         this.repoOpened.emit(info.path);
       },
-      error: (err) => {
+      error: (err: HttpErrorResponse) => {
         this.loading = false;
-        this.error = err.error?.error || 'Failed to open repository';
+        this.error = (err.error as { error?: string })?.error ?? 'Failed to open repository';
       }
     });
   }
