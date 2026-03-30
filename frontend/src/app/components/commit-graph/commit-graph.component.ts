@@ -209,10 +209,75 @@ export class CommitGraphComponent implements OnChanges {
 
     const selected = this.renderNodes.find(n => n.entry.sha === this.selectedSha);
     if (!selected) {
-      if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) {
+      const initKeys = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown',
+                        'PageUp', 'PageDown', 'Home', 'End'];
+      if (initKeys.includes(event.key)) {
         this.selectNode(this.renderNodes[0]);
         event.preventDefault();
       }
+      return;
+    }
+
+    // PageUp/PageDown/Home/End (vertical modes only)
+    if (!this.isHorizontal && ['PageUp', 'PageDown', 'Home', 'End'].includes(event.key)) {
+      // TD: up=newer(children), down=older(parents). BU is reversed.
+      const upIsNewer = this.viewMode === 'td';
+
+      let pageTarget: RenderNode | undefined;
+
+      if (event.key === 'Home' || event.key === 'End') {
+        // Jump to absolute top or bottom of the graph (by visual row position).
+        // Home=top: TD→lowest row (newest), BU→highest row (oldest).
+        // End=bottom: TD→highest row (oldest), BU→lowest row (newest).
+        const goTop = event.key === 'Home';
+        const wantMinRow = goTop ? upIsNewer : !upIsNewer;
+        pageTarget = this.renderNodes.reduce((best, n) =>
+          (wantMinRow ? n.row < best.row : n.row > best.row) ? n : best
+        );
+      } else {
+        // PageUp/PageDown: jump to this lane's entry point; if already there, cross to parent/child lane.
+        const goNewer = (event.key === 'PageUp') === upIsNewer;
+        const laneNodes = (col: number) =>
+          this.renderNodes.filter(n => n.col === col).sort((a, b) => a.row - b.row);
+
+        if (goNewer) {
+          // Newer direction: target = newest (lowest row) in current lane.
+          // If already there, jump to newest of the child lane.
+          const lane = laneNodes(selected.col);
+          const laneHead = lane[0];
+          if (selected.entry.sha !== laneHead.entry.sha) {
+            pageTarget = laneHead;
+          } else {
+            const childShas = this.childrenOf.get(selected.entry.sha) ?? [];
+            const childSha = childShas.find(
+              sha => this.renderNodes.find(n => n.entry.sha === sha && n.col !== selected.col)
+            ) ?? childShas[0];
+            const child = this.renderNodes.find(n => n.entry.sha === childSha);
+            if (child) pageTarget = laneNodes(child.col)[0];
+          }
+        } else {
+          // Older direction: target = oldest (highest row) in current lane.
+          // If already there, follow parent[0] and jump to oldest of that lane.
+          const lane = laneNodes(selected.col);
+          const laneTail = lane[lane.length - 1];
+          if (selected.entry.sha !== laneTail.entry.sha) {
+            pageTarget = laneTail;
+          } else {
+            const parentSha = selected.entry.parents[0];
+            const parent = this.renderNodes.find(n => n.entry.sha === parentSha);
+            if (parent) pageTarget = laneNodes(parent.col)[laneNodes(parent.col).length - 1];
+          }
+        }
+      }
+
+      if (pageTarget && pageTarget.entry.sha !== selected.entry.sha) {
+        this.usingKeyboard = true;
+        this.mouseActive = false;
+        if (this.mouseInactivityTimer) { clearTimeout(this.mouseInactivityTimer); this.mouseInactivityTimer = null; }
+        this.selectNode(pageTarget);
+        this.scrollToNode(pageTarget);
+      }
+      event.preventDefault();
       return;
     }
 
