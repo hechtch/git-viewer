@@ -77,8 +77,30 @@ export class GitService {
       }
     };
 
+    // Build a set of remote ref names for fast lookup
+    const remoteRefNames = new Set(remotes.map(r => r.name));
+
+    // For local branches with no configured upstream, check if a matching remote ref exists
+    // (e.g. origin/branch-name). This handles the case where the branch was pushed without -u.
+    const resolveLocalPushStatus = async (b: typeof parsed[0]): Promise<typeof parsed[0]> => {
+      if (b.upstream) return b; // already has a configured upstream
+      // Look for any remote ref matching <remote>/<branchname>
+      const matchingRemote = remotes.find(r => {
+        const slash = r.name.indexOf('/');
+        return slash !== -1 && r.name.slice(slash + 1) === b.name;
+      });
+      if (!matchingRemote) return b; // no remote branch found — truly unpushed
+      try {
+        const counts = await this.git('rev-list', '--left-right', '--count', `${matchingRemote.name}...${b.name}`);
+        const [localBehind, localAhead] = counts.split('\t').map(Number);
+        return { ...b, upstream: matchingRemote.name, localAhead, localBehind };
+      } catch {
+        return { ...b, upstream: matchingRemote.name, localAhead: 0, localBehind: 0 };
+      }
+    };
+
     const [localBranches, remoteBranches] = await Promise.all([
-      Promise.all(parsed.map(async (b) => ({ ...b, ...await computeAheadBehind(b.name) }))),
+      Promise.all(parsed.map(async (b) => ({ ...await resolveLocalPushStatus(b), ...await computeAheadBehind(b.name) }))),
       Promise.all(remotes.map(async (r) => ({ ...r, ...await computeAheadBehind(r.name) }))),
     ]);
 

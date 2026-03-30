@@ -74,7 +74,7 @@ export class CommitGraphComponent implements OnChanges {
   readonly COMMIT_SPACING = 60;
   readonly LANE_HEIGHT = 44;
   readonly NODE_RADIUS = 5;
-  readonly MARGIN = 36;
+  readonly MARGIN = 72;
   readonly CHAR_WIDTH = 7;
   readonly BADGE_PAD = 12;
 
