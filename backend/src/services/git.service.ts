@@ -39,12 +39,18 @@ export class GitService {
       return { name, sha, date, subject: rest.join('\t') };
     });
 
-    // Compute ahead/behind relative to default branch (current branch)
-    const baseBranch = current || parsed[0]?.name;
+    // Compute ahead/behind relative to the stable trunk branch, not the current checkout.
+    // This way "merged" means "merged into master/main", regardless of what's checked out.
+    const preferredBases = ['master', 'main', 'develop'];
+    const baseBranch = preferredBases.find(n => parsed.some(b => b.name === n))
+      || current
+      || parsed[0]?.name;
+
     const branches: BranchInfo[] = await Promise.all(
       parsed.map(async (b) => {
         if (!baseBranch || b.name === baseBranch) {
-          return { ...b, ahead: 0, behind: 0 };
+          // Base branch itself — omit ahead/behind so it's never shown as "merged"
+          return { ...b };
         }
         try {
           const counts = await this.git(
@@ -96,21 +102,43 @@ export class GitService {
     const info = await this.git('log', '-1', '--format=%H\t%h\t%an\t%aI\t%P\t%B', sha);
     const [hash, short, author, date, parents, ...rest] = info.split('\t');
     const message = rest.join('\t');
+    const parentShas = parents ? parents.split(' ').filter(Boolean) : [];
+    const isMerge = parentShas.length > 1;
 
-    const diffStat = await this.git('diff-tree', '--no-commit-id', '-r', '--name-status', sha);
-    const files = diffStat.split('\n').filter(Boolean).map((line) => {
-      const [status, ...fileParts] = line.split('\t');
-      return { status: statusLabel(status), path: fileParts.join('\t') };
-    });
+    let files: { status: string; path: string }[];
+    let diff: string;
 
-    const diff = await this.git('diff-tree', '-p', '--no-commit-id', sha);
+    if (isMerge) {
+      // Diff against first parent to show what the merge brought in
+      const diffStat = await this.git('diff-tree', '-r', '--name-status', parentShas[0], sha);
+      files = diffStat.split('\n').filter(Boolean).map((line) => {
+        const [status, ...fileParts] = line.split('\t');
+        return { status: statusLabel(status), path: fileParts.join('\t') };
+      });
+
+      // Try combined diff (--cc) to surface conflict resolutions
+      const ccDiff = await this.git('diff-tree', '--cc', '--no-commit-id', sha).catch(() => '');
+      if (ccDiff.trim()) {
+        diff = ccDiff;
+      } else {
+        // Clean merge — show first-parent diff so the view isn't blank
+        diff = await this.git('diff-tree', '-p', parentShas[0], sha);
+      }
+    } else {
+      const diffStat = await this.git('diff-tree', '--no-commit-id', '-r', '--name-status', sha);
+      files = diffStat.split('\n').filter(Boolean).map((line) => {
+        const [status, ...fileParts] = line.split('\t');
+        return { status: statusLabel(status), path: fileParts.join('\t') };
+      });
+      diff = await this.git('diff-tree', '-p', '--no-commit-id', sha);
+    }
 
     return {
       sha: hash,
       short,
       author,
       date,
-      parents: parents ? parents.split(' ') : [],
+      parents: parentShas,
       message,
       files,
       diff,
@@ -191,8 +219,8 @@ export interface BranchInfo {
   sha: string;
   date: string;
   subject: string;
-  ahead: number;
-  behind: number;
+  ahead?: number;  // undefined for the trunk branch itself
+  behind?: number; // undefined for the trunk branch itself
 }
 
 export interface CommitSummary {

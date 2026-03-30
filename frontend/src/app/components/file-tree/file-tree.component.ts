@@ -1,27 +1,35 @@
-import { Component, Input, OnChanges } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, Input, OnChanges, inject } from '@angular/core';
+
 import { GitApiService, TreeEntry } from '../../services/git-api.service';
 
 @Component({
-  selector: 'app-file-tree',
-  standalone: true,
-  imports: [CommonModule],
-  template: `
-    <div class="file-tree" *ngIf="ref">
-      <h3>Files at {{ ref }}</h3>
-      <div *ngFor="let f of files" class="file-row" (click)="viewFile(f.path)"
-           [class.selected]="f.path === selectedFile">
-        <span class="icon">{{ getIcon(f.path) }}</span>
-        <span class="path">{{ f.path }}</span>
+    selector: 'app-file-tree',
+    imports: [],
+    template: `
+    @if (ref) {
+      <div class="file-tree">
+        <h3>Files at {{ ref }}</h3>
+        @for (f of files; track f) {
+          <div class="file-row"
+            tabindex="0"
+            role="button"
+            (click)="viewFile(f.path)"
+            (keydown.enter)="viewFile(f.path)"
+            [class.selected]="f.path === selectedFile">
+            <span class="icon">{{ getIcon(f.path) }}</span>
+            <span class="path">{{ f.path }}</span>
+          </div>
+        }
+        @if (fileContent !== null) {
+          <div class="file-content-wrapper">
+            <h4>{{ selectedFile }}</h4>
+            <pre class="file-content"><code>{{ fileContent }}</code></pre>
+          </div>
+        }
       </div>
-
-      <div class="file-content-wrapper" *ngIf="fileContent !== null">
-        <h4>{{ selectedFile }}</h4>
-        <pre class="file-content"><code>{{ fileContent }}</code></pre>
-      </div>
-    </div>
-  `,
-  styles: [`
+    }
+    `,
+    styles: [`
     .file-tree { padding: 12px; }
     h3 { margin: 0 0 8px 0; font-size: 14px; color: #cdd6f4; }
     h4 {
@@ -57,15 +65,15 @@ import { GitApiService, TreeEntry } from '../../services/git-api.service';
   `]
 })
 export class FileTreeComponent implements OnChanges {
+  private api = inject(GitApiService);
+
   @Input() ref: string | null = null;
 
   files: TreeEntry[] = [];
   selectedFile: string | null = null;
   fileContent: string | null = null;
 
-  constructor(private api: GitApiService) {}
-
-  ngOnChanges() {
+  ngOnChanges(): void {
     this.selectedFile = null;
     this.fileContent = null;
     if (this.ref) {
@@ -73,7 +81,7 @@ export class FileTreeComponent implements OnChanges {
     }
   }
 
-  viewFile(path: string) {
+  viewFile(path: string): void {
     if (!this.ref) return;
     this.selectedFile = path;
     this.api.getFileContent(this.ref, path).subscribe(c => this.fileContent = c);

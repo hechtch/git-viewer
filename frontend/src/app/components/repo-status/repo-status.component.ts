@@ -1,28 +1,37 @@
-import { Component, OnInit } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, OnInit, inject } from '@angular/core';
+
 import { GitApiService, RepoStatus } from '../../services/git-api.service';
 
 @Component({
-  selector: 'app-repo-status',
-  standalone: true,
-  imports: [CommonModule],
-  template: `
-    <div class="status-bar" *ngIf="status">
-      <span class="branch-badge">{{ status.branch || 'detached' }}</span>
-      <span class="status-item clean" *ngIf="isClean">Clean working tree</span>
-      <span class="status-item staged" *ngIf="status.staged.length">
-        {{ status.staged.length }} staged
-      </span>
-      <span class="status-item unstaged" *ngIf="status.unstaged.length">
-        {{ status.unstaged.length }} unstaged
-      </span>
-      <span class="status-item untracked" *ngIf="status.untracked.length">
-        {{ status.untracked.length }} untracked
-      </span>
-      <button class="refresh-btn" (click)="load()">Refresh</button>
-    </div>
-  `,
-  styles: [`
+    selector: 'app-repo-status',
+    imports: [],
+    template: `
+    @if (status) {
+      <div class="status-bar">
+        <span class="branch-badge">{{ status.branch || 'detached' }}</span>
+        @if (isClean) {
+          <span class="status-item clean">Clean working tree</span>
+        }
+        @if (status.staged.length) {
+          <span class="status-item staged">
+            {{ status.staged.length }} staged
+          </span>
+        }
+        @if (status.unstaged.length) {
+          <span class="status-item unstaged">
+            {{ status.unstaged.length }} unstaged
+          </span>
+        }
+        @if (status.untracked.length) {
+          <span class="status-item untracked">
+            {{ status.untracked.length }} untracked
+          </span>
+        }
+        <button class="refresh-btn" (click)="load()">Refresh</button>
+      </div>
+    }
+    `,
+    styles: [`
     .status-bar {
       display: flex;
       align-items: center;
@@ -59,6 +68,8 @@ import { GitApiService, RepoStatus } from '../../services/git-api.service';
   `]
 })
 export class RepoStatusComponent implements OnInit {
+  private api = inject(GitApiService);
+
   status: RepoStatus | null = null;
 
   get isClean(): boolean {
@@ -68,11 +79,9 @@ export class RepoStatusComponent implements OnInit {
       !this.status.untracked.length;
   }
 
-  constructor(private api: GitApiService) {}
+  ngOnInit(): void { this.load(); }
 
-  ngOnInit() { this.load(); }
-
-  load() {
+  load(): void {
     this.api.getStatus().subscribe(s => this.status = s);
   }
 }

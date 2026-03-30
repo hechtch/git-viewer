@@ -1,136 +1,182 @@
-<div class="toast-bar">
-  <div class="toast" *ngIf="toastVisible">
-    {{ toastMessage }}
+<div class="graph-container" [class.mode-td]="!isHorizontal" [class.show-hover]="showMouseHover" (mousemove)="onMouseMove()">
+  <div class="toast-bar">
+    @if (toastVisible) {
+      <div class="toast"
+           [class.toast-prominent]="toastProminent"
+           [style.position]="toastProminent ? 'fixed' : null"
+           [style.left]="toastProminent ? toastCx + 'px' : null"
+           [style.top]="toastProminent ? toastCy + 'px' : null"
+           [style.transform]="toastProminent ? 'translate(-50%, -50%)' : null">
+        {{ toastMessage }}
+      </div>
+    }
   </div>
-</div>
-<div class="graph-container">
-  <!-- Pinned lane labels on the left -->
-  <div class="lane-labels" [style.height.px]="svgHeight">
-    <div
-      *ngFor="let lane of laneLabels"
-      class="lane-label-row"
-      [class.lane-label-row-selected]="lane.col === selectedCol"
-      [style.top.px]="nodeY(lane.col) - LANE_HEIGHT / 2"
-      [style.height.px]="LANE_HEIGHT">
-      <span
-        class="lane-label"
-        [class.lane-label-selected]="lane.col === selectedCol"
-        [style.color]="lane.color">
-        {{ lane.name }}
-      </span>
-      <span *ngIf="laneStatus.get(lane.col) as s"
-        class="lane-status-badge"
-        [class.lane-status-merged]="s.isMerged"
-        [class.lane-status-ahead]="!s.isMerged">
-        {{ s.label }}
-      </span>
+
+
+  <!-- LR mode: pinned lane labels on the left -->
+  @if (isHorizontal) {
+    <div class="lane-labels" [style.height.px]="svgHeight * zoom">
+      @for (lane of laneLabels; track lane) {
+        <div
+          class="lane-label-row"
+          [class.lane-label-row-selected]="lane.col === selectedCol"
+          [class.lane-label-row-hidden]="!showMerged && lane.merged"
+          [style.top.px]="(lanePrimaryPos(lane.col) - LANE_HEIGHT / 2) * zoom"
+          [style.height.px]="LANE_HEIGHT * zoom">
+          <span
+            class="lane-label"
+            [class.lane-label-selected]="lane.col === selectedCol"
+            [style.color]="lane.color">
+            {{ lane.name }}
+          </span>
+          @if (laneStatus.get(lane.col); as s) {
+            <span
+              class="lane-status-badge"
+              [class.lane-status-merged]="s.isMerged"
+              [class.lane-status-ahead]="!s.isMerged">
+              {{ s.label }}
+            </span>
+          }
+        </div>
+      }
     </div>
-  </div>
+  }
 
   <!-- Horizontally scrollable graph -->
-  <div class="graph-scroll">
+  <div class="graph-scroll" #graphScroll (wheel)="onWheel($event)">
     <svg
-      [attr.width]="svgWidth"
-      [attr.height]="svgHeight"
+      [attr.width]="svgWidth * zoom"
+      [attr.height]="svgHeight * zoom"
+      [attr.viewBox]="'0 0 ' + svgWidth + ' ' + svgHeight"
       class="graph-svg">
 
-      <!-- Horizontal lane row targets (hover highlight) -->
+      <!-- Lane background rows (LR) or columns (TD) -->
       <g class="lane-rows">
-        <rect
-          *ngFor="let lane of laneLabels"
-          x="0"
-          [attr.y]="nodeY(lane.col) - LANE_HEIGHT / 2"
-          [attr.width]="svgWidth"
-          [attr.height]="LANE_HEIGHT"
-          fill="transparent"
-          class="lane-hit-target"
-          [class.lane-selected]="lane.col === selectedCol"
-        />
+        @for (lane of laneLabels; track lane) {
+          @if (isHorizontal) {
+            <rect
+              x="0"
+              [attr.y]="lanePrimaryPos(lane.col) - LANE_HEIGHT / 2"
+              [attr.width]="svgWidth"
+              [attr.height]="LANE_HEIGHT"
+              fill="transparent"
+              class="lane-hit-target"
+              [class.lane-selected]="lane.col === selectedCol"
+              [class.lane-merged-hidden]="!showMerged && lane.merged"
+              />
+          } @else {
+            <rect
+              [attr.x]="lanePrimaryPos(lane.col) - LANE_HEIGHT / 2"
+              y="0"
+              [attr.width]="LANE_HEIGHT"
+              [attr.height]="svgHeight"
+              fill="transparent"
+              class="lane-hit-target"
+              [class.lane-selected]="lane.col === selectedCol"
+              [class.lane-merged-hidden]="!showMerged && lane.merged"
+              />
+          }
+        }
       </g>
 
-      <!-- Dashed lane guide lines -->
+      <!-- Lane guide lines -->
       <g class="lane-guides">
-        <line
-          *ngFor="let lane of laneLabels"
-          x1="0"
-          [attr.y1]="nodeY(lane.col)"
-          [attr.x2]="svgWidth"
-          [attr.y2]="nodeY(lane.col)"
-          stroke="#313244"
-          stroke-width="1"
-          stroke-dasharray="4,4"
-        />
+        @for (lane of laneLabels; track lane) {
+          @if (isHorizontal) {
+            <line
+              x1="0" [attr.y1]="lanePrimaryPos(lane.col)"
+              [attr.x2]="svgWidth" [attr.y2]="lanePrimaryPos(lane.col)"
+              stroke="#313244" stroke-width="1" stroke-dasharray="4,4"/>
+          } @else {
+            <line
+              [attr.x1]="lanePrimaryPos(lane.col)" y1="0"
+              [attr.x2]="lanePrimaryPos(lane.col)" [attr.y2]="svgHeight"
+              stroke="#313244" stroke-width="1" stroke-dasharray="4,4"/>
+          }
+        }
       </g>
 
       <!-- Edges -->
       <g class="edges">
-        <path
-          *ngFor="let edge of allEdges"
-          [attr.d]="edge.path"
-          [attr.stroke]="edge.color"
-          stroke-width="2"
-          fill="none"
-        />
+        @for (edge of allEdges; track edge) {
+          <path [attr.d]="edge.path" [attr.stroke]="edge.color" stroke-width="2" fill="none"/>
+        }
       </g>
 
       <!-- Nodes -->
-      <g *ngFor="let node of renderNodes">
-        <!-- Vertical column hit target -->
-        <rect
-          [attr.x]="nodeX(node.row) - COMMIT_SPACING / 2"
-          y="0"
-          [attr.width]="COMMIT_SPACING"
-          [attr.height]="svgHeight"
-          fill="transparent"
-          class="hit-target"
-          [class.selected]="node.entry.sha === selectedSha"
-          (click)="onCommitClick(node.entry.sha)">
-          <title>{{ node.entry.short }} — {{ node.entry.message }}</title>
-        </rect>
+      @for (node of renderNodes; track node) {
+        <g>
+          <!-- Hit target: vertical stripe (LR) or horizontal stripe (TD) -->
+          @if (isHorizontal) {
+            <rect
+              [attr.x]="nodeX(node.row, node.col) - COMMIT_SPACING / 2"
+              y="0"
+              [attr.width]="COMMIT_SPACING"
+              [attr.height]="svgHeight"
+              fill="transparent"
+              class="hit-target"
+              [class.selected]="node.entry.sha === selectedSha"
+              (click)="onCommitClick(node.entry.sha)">
+              <title>{{ node.entry.short }} — {{ node.entry.message }}</title>
+            </rect>
+          } @else {
+            <rect
+              x="0"
+              [attr.y]="nodeY(node.row, node.col) - COMMIT_SPACING / 2"
+              [attr.width]="svgWidth"
+              [attr.height]="COMMIT_SPACING"
+              fill="transparent"
+              class="hit-target"
+              [class.selected]="node.entry.sha === selectedSha"
+              (click)="onCommitClick(node.entry.sha)">
+              <title>{{ node.entry.short }} — {{ node.entry.message }}</title>
+            </rect>
+          }
 
-        <!-- Ref badges above node -->
-        <g *ngFor="let badge of node.badges; let i = index">
-          <rect
-            [attr.x]="nodeX(node.row) - badge.width / 2"
-            [attr.y]="nodeY(node.col) - 26 - i * 20"
-            [attr.width]="badge.width"
-            height="16"
-            rx="3"
-            [attr.fill]="badge.color"
-            [attr.stroke]="badge.borderColor"
-            stroke-width="1"
-          />
+          <!-- Ref badges -->
+          @for (badge of node.badges; track badge; let i = $index) {
+            <g>
+              <rect
+                [attr.x]="badgeRectX(node.row, node.col, badge.width, i)"
+                [attr.y]="badgeRectY(node.row, node.col, i)"
+                [attr.width]="badge.width"
+                height="16"
+                rx="3"
+                [attr.fill]="badge.color"
+                [attr.stroke]="badge.borderColor"
+                stroke-width="1"/>
+              <text
+                [attr.x]="badgeTextX(node.row, node.col, i)"
+                [attr.y]="badgeTextY(node.row, node.col, i)"
+                class="ref-text"
+                [attr.text-anchor]="badgeTextAnchor"
+                [attr.fill]="badge.textColor">
+                {{ badge.label }}
+              </text>
+            </g>
+          }
+
+          <!-- Node circle -->
+          <circle
+            [attr.cx]="nodeX(node.row, node.col)"
+            [attr.cy]="nodeY(node.row, node.col)"
+            [attr.r]="NODE_RADIUS"
+            [attr.fill]="node.color"
+            [attr.stroke]="node.color"
+            stroke-width="2">
+            <title>{{ node.entry.short }} — {{ node.entry.message }}</title>
+          </circle>
+
+          <!-- Short hash -->
           <text
-            [attr.x]="nodeX(node.row)"
-            [attr.y]="nodeY(node.col) - 14 - i * 20"
-            class="ref-text"
-            text-anchor="middle"
-            [attr.fill]="badge.textColor">
-            {{ badge.label }}
+            [attr.x]="hashLabelX(node.row, node.col)"
+            [attr.y]="hashLabelY(node.row, node.col)"
+            class="hash-label"
+            [attr.text-anchor]="hashTextAnchor">
+            {{ node.entry.short }}
           </text>
         </g>
-
-        <!-- Node circle -->
-        <circle
-          [attr.cx]="nodeX(node.row)"
-          [attr.cy]="nodeY(node.col)"
-          [attr.r]="NODE_RADIUS"
-          [attr.fill]="node.color"
-          [attr.stroke]="node.color"
-          stroke-width="2">
-          <title>{{ node.entry.short }} — {{ node.entry.message }}</title>
-        </circle>
-
-        <!-- Short hash below node -->
-        <text
-          [attr.x]="nodeX(node.row)"
-          [attr.y]="nodeY(node.col) + 18"
-          class="hash-label"
-          text-anchor="middle">
-          {{ node.entry.short }}
-        </text>
-
-      </g>
+      }
     </svg>
   </div>
 </div>

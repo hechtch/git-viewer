@@ -2,7 +2,9 @@
   <div class="dialog">
     <div class="dialog-header">
       <h2>Open Repository</h2>
-      <button class="close-btn" *ngIf="canCancel" (click)="cancel()">✕</button>
+      @if (canCancel) {
+        <button class="close-btn" (click)="cancel()">✕</button>
+      }
     </div>
 
     <!-- Native OS folder picker -->
@@ -36,13 +38,17 @@
         placeholder="/home/user/my-project"
         (keydown.enter)="open()"
         spellcheck="false"
-      />
+        />
     </div>
 
-    <div class="error" *ngIf="error">{{ error }}</div>
+    @if (error) {
+      <div class="error">{{ error }}</div>
+    }
 
     <div class="actions">
-      <button class="secondary" (click)="cancel()" *ngIf="canCancel">Cancel</button>
+      @if (canCancel) {
+        <button class="secondary" (click)="cancel()">Cancel</button>
+      }
       <button class="primary" (click)="open()" [disabled]="loading || !selectedPath.trim()">
         {{ loading ? 'Opening...' : 'Open' }}
       </button>
