@@ -1,9 +1,10 @@
-<div class="toast-bar">
-  @if (toastVisible) {
-    <div class="toast">{{ toastMessage }}</div>
-  }
-</div>
 <div class="graph-container" [class.mode-td]="!isHorizontal" [class.show-hover]="showMouseHover" (mousemove)="onMouseMove()">
+  <div class="toast-bar">
+    @if (toastVisible) {
+      <div class="toast" [class.toast-prominent]="toastProminent">{{ toastMessage }}</div>
+    }
+  </div>
+
 
   <!-- LR mode: pinned lane labels on the left -->
   @if (isHorizontal) {

@@ -65,6 +65,7 @@ export class CommitGraphComponent implements OnChanges {
   selectedCol = -1;
   toastMessage = '';
   toastVisible = false;
+  toastProminent = false;
 
   private childrenOf = new Map<string, string[]>();
 
@@ -106,6 +107,15 @@ export class CommitGraphComponent implements OnChanges {
       this.buildEdges();
       this.computeDimensions();
       this.buildChildrenMap();
+    }
+    if (changes['viewMode'] && !changes['viewMode'].firstChange) {
+      const labels: Record<string, string> = {
+        lr: '← older · newer →',
+        rl: '← newer · older →',
+        td: '↑ newer · older ↓',
+        bu: '↑ older · newer ↓',
+      };
+      this.showToast(labels[this.viewMode], true);
     }
     if (this.jumpToBranch) {
       this.jumpToNamedBranch(this.jumpToBranch);
@@ -461,11 +471,12 @@ export class CommitGraphComponent implements OnChanges {
     }
   }
 
-  private showToast(message: string): void {
+  private showToast(message: string, prominent = false): void {
     this.toastVisible = false;
     if (this.toastTimer) clearTimeout(this.toastTimer);
     requestAnimationFrame(() => {
       this.toastMessage = message;
+      this.toastProminent = prominent;
       this.toastVisible = true;
       this.toastTimer = setTimeout(() => { this.toastVisible = false; }, 2000);
     });
