@@ -6,6 +6,7 @@ import { computeLayout, LayoutNode, LayoutEdge } from './graph-layout';
 interface RenderEdge {
   path: string;
   color: string;
+  merged: boolean;
 }
 
 interface RefBadge {
@@ -61,6 +62,7 @@ export class CommitGraphComponent implements OnChanges {
   allEdges: RenderEdge[] = [];
   laneLabels: LaneLabel[] = [];
   laneStatus = new Map<number, StatusBadge>();
+  mergedCols = new Set<number>();
   selectedSha = '';
   selectedCol = -1;
   toastMessage = '';
@@ -557,8 +559,8 @@ export class CommitGraphComponent implements OnChanges {
         for (const ref of node.entry.refs) {
           const name = ref.replace('HEAD -> ', '');
           const info = branchMap.get(name);
-          if (info) {
-            const isMerged = (info.ahead ?? -1) === 0;
+          if (info && info.ahead !== undefined) {
+            const isMerged = info.ahead === 0;
             const label = isMerged ? 'merged' : `▲${info.ahead}${info.behind ? ' ▼' + info.behind : ''}`;
             this.laneStatus.set(node.col, { label, width: label.length * this.CHAR_WIDTH + this.BADGE_PAD, isMerged });
             break;
@@ -568,13 +570,19 @@ export class CommitGraphComponent implements OnChanges {
 
       return { ...node, badges };
     });
+
+    this.mergedCols.clear();
+    for (const [col, status] of this.laneStatus) {
+      if (status.isMerged) this.mergedCols.add(col);
+    }
   }
 
   private buildEdges(): void {
     this.allEdges = [];
     for (const node of this.renderNodes) {
       for (const edge of node.edges) {
-        this.allEdges.push({ path: this.edgePath(node.row, edge), color: edge.color });
+        const merged = this.mergedCols.has(node.col) && this.mergedCols.has(edge.toCol);
+        this.allEdges.push({ path: this.edgePath(node.row, edge), color: edge.color, merged });
       }
     }
   }

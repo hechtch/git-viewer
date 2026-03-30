@@ -29,12 +29,12 @@ export class GitService {
 
   async getBranches(): Promise<{ branches: BranchInfo[]; current: string }> {
     const current = await this.git('branch', '--show-current');
-    const raw = await this.git(
+    const localRaw = await this.git(
       'for-each-ref',
       '--format=%(refname:short)\t%(objectname:short)\t%(committerdate:iso8601)\t%(upstream:short)\t%(upstream:track)\t%(subject)',
       'refs/heads/'
     );
-    const parsed = raw.split('\n').filter(Boolean).map((line) => {
+    const parsed = localRaw.split('\n').filter(Boolean).map((line) => {
       const parts = line.split('\t');
       const name = parts[0];
       const sha = parts[1];
@@ -46,6 +46,19 @@ export class GitService {
       return { name, sha, date, subject, upstream, localAhead, localBehind };
     });
 
+    // Also fetch remote tracking refs so the graph can determine their merged status.
+    const remoteRaw = await this.git(
+      'for-each-ref',
+      '--format=%(refname:short)\t%(objectname:short)\t%(committerdate:iso8601)\t%(subject)',
+      'refs/remotes/'
+    ).catch(() => '');
+    const remotes = remoteRaw.split('\n').filter(Boolean)
+      .map((line) => {
+        const parts = line.split('\t');
+        return { name: parts[0], sha: parts[1], date: parts[2], subject: parts.slice(3).join('\t') };
+      })
+      .filter(r => !r.name.endsWith('/HEAD')); // skip symbolic refs like origin/HEAD
+
     // Compute ahead/behind relative to the stable trunk branch, not the current checkout.
     // This way "merged" means "merged into master/main", regardless of what's checked out.
     const preferredBases = ['master', 'main', 'develop'];
@@ -53,26 +66,23 @@ export class GitService {
       || current
       || parsed[0]?.name;
 
-    const branches: BranchInfo[] = await Promise.all(
-      parsed.map(async (b) => {
-        if (!baseBranch || b.name === baseBranch) {
-          // Base branch itself — omit ahead/behind so it's never shown as "merged"
-          return { ...b };
-        }
-        try {
-          const counts = await this.git(
-            'rev-list', '--left-right', '--count',
-            `${baseBranch}...${b.name}`
-          );
-          const [behind, ahead] = counts.split('\t').map(Number);
-          return { ...b, ahead, behind };
-        } catch {
-          return { ...b, ahead: 0, behind: 0 };
-        }
-      })
-    );
+    const computeAheadBehind = async (refName: string): Promise<{ ahead: number; behind: number } | Record<string, never>> => {
+      if (!baseBranch || refName === baseBranch) return {};
+      try {
+        const counts = await this.git('rev-list', '--left-right', '--count', `${baseBranch}...${refName}`);
+        const [behind, ahead] = counts.split('\t').map(Number);
+        return { ahead, behind };
+      } catch {
+        return { ahead: 0, behind: 0 };
+      }
+    };
 
-    return { branches, current };
+    const [localBranches, remoteBranches] = await Promise.all([
+      Promise.all(parsed.map(async (b) => ({ ...b, ...await computeAheadBehind(b.name) }))),
+      Promise.all(remotes.map(async (r) => ({ ...r, ...await computeAheadBehind(r.name) }))),
+    ]);
+
+    return { branches: [...localBranches, ...remoteBranches], current };
   }
 
   async getCommits(options: {

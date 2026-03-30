@@ -21,6 +21,7 @@
           class="lane-label-row"
           [class.lane-label-row-selected]="lane.col === selectedCol"
           [class.lane-label-row-hidden]="!showMerged && lane.merged"
+          [class.lane-label-row-merged]="showMerged && lane.merged"
           [style.top.px]="(lanePrimaryPos(lane.col) - LANE_HEIGHT / 2) * zoom"
           [style.height.px]="LANE_HEIGHT * zoom">
           <span
@@ -86,12 +87,16 @@
             <line
               x1="0" [attr.y1]="lanePrimaryPos(lane.col)"
               [attr.x2]="svgWidth" [attr.y2]="lanePrimaryPos(lane.col)"
-              stroke="#313244" stroke-width="1" stroke-dasharray="4,4"/>
+              stroke="#313244" stroke-width="1" stroke-dasharray="4,4"
+              [style.display]="!showMerged && mergedCols.has(lane.col) ? 'none' : null"
+              [class.merged-dim]="showMerged && mergedCols.has(lane.col)"/>
           } @else {
             <line
               [attr.x1]="lanePrimaryPos(lane.col)" y1="0"
               [attr.x2]="lanePrimaryPos(lane.col)" [attr.y2]="svgHeight"
-              stroke="#313244" stroke-width="1" stroke-dasharray="4,4"/>
+              stroke="#313244" stroke-width="1" stroke-dasharray="4,4"
+              [style.display]="!showMerged && mergedCols.has(lane.col) ? 'none' : null"
+              [class.merged-dim]="showMerged && mergedCols.has(lane.col)"/>
           }
         }
       </g>
@@ -99,13 +104,16 @@
       <!-- Edges -->
       <g class="edges">
         @for (edge of allEdges; track edge) {
-          <path [attr.d]="edge.path" [attr.stroke]="edge.color" stroke-width="2" fill="none"/>
+          <path [attr.d]="edge.path" [attr.stroke]="edge.color" stroke-width="2" fill="none"
+                [style.display]="!showMerged && edge.merged ? 'none' : null"
+                [class.merged-dim]="showMerged && edge.merged"/>
         }
       </g>
 
       <!-- Nodes -->
       @for (node of renderNodes; track node) {
-        <g>
+        <g [style.display]="!showMerged && mergedCols.has(node.col) ? 'none' : null"
+           [class.merged-dim]="showMerged && mergedCols.has(node.col)">
           <!-- Hit target: vertical stripe (LR) or horizontal stripe (TD) -->
           @if (isHorizontal) {
             <rect

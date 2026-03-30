@@ -179,6 +179,7 @@ export class BranchListComponent implements OnChanges {
   private api = inject(GitApiService);
 
   @Input() repoPath: string | null = null;
+  @Input() refreshTick = 0;
   @Output() branchSelected = new EventEmitter<string | null>();
 
   branches: BranchInfo[] = [];

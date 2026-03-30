@@ -1,4 +1,4 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnInit, Output, EventEmitter, inject } from '@angular/core';
 
 import { GitApiService, RepoStatus } from '../../services/git-api.service';
 
@@ -70,6 +70,8 @@ import { GitApiService, RepoStatus } from '../../services/git-api.service';
 export class RepoStatusComponent implements OnInit {
   private api = inject(GitApiService);
 
+  @Output() refreshed = new EventEmitter<void>();
+
   status: RepoStatus | null = null;
 
   get isClean(): boolean {
@@ -82,6 +84,9 @@ export class RepoStatusComponent implements OnInit {
   ngOnInit(): void { this.load(); }
 
   load(): void {
-    this.api.getStatus().subscribe(s => this.status = s);
+    this.api.getStatus().subscribe(s => {
+      this.status = s;
+      this.refreshed.emit();
+    });
   }
 }

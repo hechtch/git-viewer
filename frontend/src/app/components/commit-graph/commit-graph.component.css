@@ -75,11 +75,19 @@
 }
 
 .lane-label-row-hidden {
-  opacity: 0.25;
+  display: none;
 }
 
 .lane-merged-hidden {
-  opacity: 0.25;
+  display: none;
+}
+
+.lane-label-row-merged {
+  opacity: 0.35;
+}
+
+.merged-dim {
+  opacity: 0.35;
 }
 
 .lane-label {
