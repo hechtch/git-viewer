@@ -116,6 +116,11 @@ export class CommitGraphComponent implements OnChanges {
         bu: '↑ older · newer ↓',
       };
       this.showToast(labels[this.viewMode], true);
+      // Re-center on the selected commit after the new layout renders
+      setTimeout(() => {
+        const node = this.renderNodes.find(n => n.entry.sha === this.selectedSha);
+        if (node) this.scrollToNode(node);
+      });
     }
     if (this.jumpToBranch) {
       this.jumpToNamedBranch(this.jumpToBranch);
