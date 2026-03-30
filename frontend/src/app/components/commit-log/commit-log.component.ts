@@ -66,6 +66,7 @@ interface CommitRow extends CommitSummary {
         <app-commit-graph
           [entries]="visibleGraphEntries"
           [branches]="visibleBranchInfos"
+          [currentBranch]="currentBranch"
           [showMerged]="showMerged"
           [viewMode]="viewMode"
           [jumpToBranch]="jumpToBranch"

@@ -33,6 +33,7 @@ export interface LaneLabel {
   col: number;
   color: string;
   merged?: boolean;
+  isCurrent?: boolean;
 }
 
 function buildStatusTooltip(info: BranchInfo): string {
@@ -64,6 +65,7 @@ function buildStatusTooltip(info: BranchInfo): string {
 export class CommitGraphComponent implements OnChanges {
   @Input() entries: GraphEntry[] = [];
   @Input() branches: BranchInfo[] = [];
+  @Input() currentBranch = '';
   @Input() showMerged = true;
   @Input() jumpToBranch: string | null = null;
   @Input() viewMode: 'lr' | 'rl' | 'td' | 'bu' = 'lr';
@@ -121,7 +123,7 @@ export class CommitGraphComponent implements OnChanges {
   }
 
   ngOnChanges(changes: SimpleChanges): void {
-    if (changes['entries'] || changes['branches'] || changes['showMerged'] || changes['viewMode']) {
+    if (changes['entries'] || changes['branches'] || changes['currentBranch'] || changes['showMerged'] || changes['viewMode']) {
       const nodes = computeLayout(this.entries);
       this._maxCol = 0;
       for (const n of nodes) {
@@ -548,7 +550,11 @@ export class CommitGraphComponent implements OnChanges {
       if (labelMap.has(node.col)) continue;
       if (node.entry.refs.length > 0) {
         const name = node.entry.refs[0].replace('HEAD -> ', '');
-        labelMap.set(node.col, { name, col: node.col, color: node.color, merged: mergedSet.has(name) });
+        labelMap.set(node.col, {
+          name, col: node.col, color: node.color,
+          merged: mergedSet.has(name),
+          isCurrent: name === this.currentBranch,
+        });
       }
     }
     for (const node of nodes) {

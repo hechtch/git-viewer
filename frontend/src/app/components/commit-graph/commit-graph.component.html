@@ -30,12 +30,15 @@
             [style.color]="lane.color">
             {{ lane.name }}
           </span>
+          @if (lane.isCurrent) {
+            <span class="lane-head-badge">HEAD</span>
+          }
           @if (laneStatus.get(lane.col); as s) {
             <span
               class="lane-status-badge"
               [class.lane-status-merged]="s.isMerged"
               [class.lane-status-ahead]="!s.isMerged"
-              [title]="s.tooltip">
+              [attr.data-tooltip]="s.isMerged ? null : s.tooltip">
               {{ s.label }}
             </span>
           }
