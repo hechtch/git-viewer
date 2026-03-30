@@ -46,6 +46,19 @@ import { GitApiService, BranchInfo } from '../../services/git-api.service';
                 </span>
               }
             }
+            @if (!b.upstream) {
+              <span class="no-remote" title="no remote tracking branch">local</span>
+            }
+            @if (b.upstream && ((b.localAhead ?? 0) > 0 || (b.localBehind ?? 0) > 0)) {
+              <span class="remote-status">
+                @if ((b.localAhead ?? 0) > 0) {
+                  <span class="unpushed" [title]="b.localAhead + ' unpushed commit(s)'">↑{{ b.localAhead }}</span>
+                }
+                @if ((b.localBehind ?? 0) > 0) {
+                  <span class="remote-ahead" [title]="b.localBehind + ' commit(s) on remote not fetched'">↓{{ b.localBehind }}</span>
+                }
+              </span>
+            }
           </span>
         </button>
       }
@@ -139,6 +152,26 @@ import { GitApiService, BranchInfo } from '../../services/git-api.service';
       padding: 1px 5px;
       border-radius: 3px;
       font-weight: 600;
+    }
+    .no-remote {
+      font-size: 10px;
+      font-family: monospace;
+      color: #6c7086;
+      border: 1px solid #45475a;
+      padding: 1px 5px;
+      border-radius: 3px;
+    }
+    .remote-status {
+      font-size: 10px;
+      font-family: monospace;
+      display: flex;
+      gap: 4px;
+    }
+    .unpushed {
+      color: #89b4fa;
+    }
+    .remote-ahead {
+      color: #f38ba8;
     }
   `]
 })

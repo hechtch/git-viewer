@@ -8,8 +8,11 @@ export interface BranchInfo {
   sha: string;
   date: string;
   subject: string;
-  ahead?: number;  // undefined for the trunk branch itself
-  behind?: number; // undefined for the trunk branch itself
+  ahead?: number;      // commits ahead of trunk; undefined for the trunk branch itself
+  behind?: number;     // commits behind trunk; undefined for the trunk branch itself
+  upstream?: string;   // remote tracking ref e.g. "origin/main"; undefined = no remote
+  localAhead?: number; // unpushed commits (local commits not on remote)
+  localBehind?: number;// commits on remote not yet fetched locally
 }
 
 export interface BranchesResponse {

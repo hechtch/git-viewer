@@ -31,12 +31,19 @@ export class GitService {
     const current = await this.git('branch', '--show-current');
     const raw = await this.git(
       'for-each-ref',
-      '--format=%(refname:short)\t%(objectname:short)\t%(committerdate:iso8601)\t%(subject)',
+      '--format=%(refname:short)\t%(objectname:short)\t%(committerdate:iso8601)\t%(upstream:short)\t%(upstream:track)\t%(subject)',
       'refs/heads/'
     );
     const parsed = raw.split('\n').filter(Boolean).map((line) => {
-      const [name, sha, date, ...rest] = line.split('\t');
-      return { name, sha, date, subject: rest.join('\t') };
+      const parts = line.split('\t');
+      const name = parts[0];
+      const sha = parts[1];
+      const date = parts[2];
+      const upstream = parts[3] || undefined;
+      const upstreamTrack = parts[4] || '';
+      const subject = parts.slice(5).join('\t');
+      const { localAhead, localBehind } = parseUpstreamTrack(upstreamTrack);
+      return { name, sha, date, subject, upstream, localAhead, localBehind };
     });
 
     // Compute ahead/behind relative to the stable trunk branch, not the current checkout.
@@ -202,6 +209,15 @@ export class GitService {
   }
 }
 
+function parseUpstreamTrack(track: string): { localAhead: number; localBehind: number } {
+  const aheadMatch = track.match(/ahead (\d+)/);
+  const behindMatch = track.match(/behind (\d+)/);
+  return {
+    localAhead: aheadMatch ? parseInt(aheadMatch[1], 10) : 0,
+    localBehind: behindMatch ? parseInt(behindMatch[1], 10) : 0,
+  };
+}
+
 function statusLabel(code: string): string {
   const map: Record<string, string> = {
     A: 'added',
@@ -219,8 +235,11 @@ export interface BranchInfo {
   sha: string;
   date: string;
   subject: string;
-  ahead?: number;  // undefined for the trunk branch itself
-  behind?: number; // undefined for the trunk branch itself
+  ahead?: number;      // commits ahead of trunk; undefined for the trunk branch itself
+  behind?: number;     // commits behind trunk; undefined for the trunk branch itself
+  upstream?: string;   // remote tracking ref, e.g. "origin/main"; undefined = no remote
+  localAhead?: number; // unpushed commits (local commits not on remote)
+  localBehind?: number;// commits on remote not yet fetched locally
 }
 
 export interface CommitSummary {
