@@ -1,7 +1,14 @@
 <div class="graph-container" [class.mode-td]="!isHorizontal" [class.show-hover]="showMouseHover" (mousemove)="onMouseMove()">
   <div class="toast-bar">
     @if (toastVisible) {
-      <div class="toast" [class.toast-prominent]="toastProminent">{{ toastMessage }}</div>
+      <div class="toast"
+           [class.toast-prominent]="toastProminent"
+           [style.position]="toastProminent ? 'fixed' : null"
+           [style.left]="toastProminent ? toastCx + 'px' : null"
+           [style.top]="toastProminent ? toastCy + 'px' : null"
+           [style.transform]="toastProminent ? 'translate(-50%, -50%)' : null">
+        {{ toastMessage }}
+      </div>
     }
   </div>
 

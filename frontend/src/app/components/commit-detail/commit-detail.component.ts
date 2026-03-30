@@ -13,7 +13,7 @@ interface DiffLine {
     template: `
     @if (detail) {
       <div class="detail">
-        <div class="meta-block">
+        <div class="meta-block" (click)="diffPre.focus()">
           <div class="msg">{{ detail.message }}</div>
           <div class="meta-row">
             <span class="sha">{{ detail.sha }}</span>
@@ -40,8 +40,8 @@ interface DiffLine {
             }
           </div>
         </div>
-        <div class="diff-section">
-          <pre class="diff" #diffPre>@for (line of diffLines; track $index; let i = $index) {<span [class]="getLineClass(i, line.type)">{{ line.text }}
+        <div class="diff-section" (click)="diffPre.focus()">
+          <pre class="diff" #diffPre tabindex="-1">@for (line of diffLines; track $index; let i = $index) {<span [class]="getLineClass(i, line.type)">{{ line.text }}
 </span>}</pre>
         </div>
       </div>
@@ -146,6 +146,7 @@ interface DiffLine {
       border-radius: 6px;
       padding: 8px 12px;
       overflow: auto;
+      outline: none;
       font-size: calc(12px * var(--text-zoom, 1));
       line-height: 1.5;
       color: #cdd6f4;

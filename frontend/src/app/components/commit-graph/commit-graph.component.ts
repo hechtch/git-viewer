@@ -66,6 +66,8 @@ export class CommitGraphComponent implements OnChanges {
   toastMessage = '';
   toastVisible = false;
   toastProminent = false;
+  toastCx = 0;
+  toastCy = 0;
 
   private childrenOf = new Map<string, string[]>();
 
@@ -115,11 +117,12 @@ export class CommitGraphComponent implements OnChanges {
         td: '↑ newer · older ↓',
         bu: '↑ older · newer ↓',
       };
-      this.showToast(labels[this.viewMode], true);
-      // Re-center on the selected commit after the new layout renders (instant = no visible scroll)
+      const label = labels[this.viewMode];
+      // Scroll first (instant), then measure the rect and show the toast
       setTimeout(() => {
         const node = this.renderNodes.find(n => n.entry.sha === this.selectedSha);
         if (node) this.scrollToNode(node, 'instant');
+        this.showToast(label, true);
       });
     }
     if (this.jumpToBranch) {
@@ -221,6 +224,12 @@ export class CommitGraphComponent implements OnChanges {
   @HostListener('document:keydown', ['$event'])
   onKeyDown(event: KeyboardEvent): void {
     if (!this.renderNodes.length) return;
+
+    // Let the commit detail handle its own scrolling when it has focus
+    if (['PageUp', 'PageDown', 'Home', 'End'].includes(event.key) &&
+        document.activeElement?.closest('app-commit-detail')) {
+      return;
+    }
 
     const selected = this.renderNodes.find(n => n.entry.sha === this.selectedSha);
     if (!selected) {
@@ -480,6 +489,24 @@ export class CommitGraphComponent implements OnChanges {
     this.toastVisible = false;
     if (this.toastTimer) clearTimeout(this.toastTimer);
     requestAnimationFrame(() => {
+      if (prominent) {
+        // Walk up to the scrollable container (commit-log-panel) — it has a stable visible size
+        // in all modes, unlike the host element which is SVG-height tall in TD/BU.
+        const hostEl = this.hostEl.nativeElement as HTMLElement;
+        let rect: DOMRect = hostEl.getBoundingClientRect();
+        let parent: HTMLElement | null = hostEl.parentElement;
+        while (parent) {
+          const style = window.getComputedStyle(parent);
+          if ((style.overflow + ' ' + style.overflowY).includes('auto') ||
+              (style.overflow + ' ' + style.overflowY).includes('scroll')) {
+            rect = parent.getBoundingClientRect();
+            break;
+          }
+          parent = parent.parentElement;
+        }
+        this.toastCx = rect.left + rect.width / 2;
+        this.toastCy = rect.top + rect.height / 2;
+      }
       this.toastMessage = message;
       this.toastProminent = prominent;
       this.toastVisible = true;
