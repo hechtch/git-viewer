@@ -116,10 +116,10 @@ export class CommitGraphComponent implements OnChanges {
         bu: '↑ older · newer ↓',
       };
       this.showToast(labels[this.viewMode], true);
-      // Re-center on the selected commit after the new layout renders
+      // Re-center on the selected commit after the new layout renders (instant = no visible scroll)
       setTimeout(() => {
         const node = this.renderNodes.find(n => n.entry.sha === this.selectedSha);
-        if (node) this.scrollToNode(node);
+        if (node) this.scrollToNode(node, 'instant');
       });
     }
     if (this.jumpToBranch) {
@@ -385,14 +385,14 @@ export class CommitGraphComponent implements OnChanges {
     this.zoom = Math.min(this.MAX_ZOOM, Math.max(this.MIN_ZOOM, +(this.zoom + delta).toFixed(2)));
   }
 
-  private scrollToNode(node: RenderNode): void {
+  private scrollToNode(node: RenderNode, behavior: ScrollBehavior = 'smooth'): void {
     const el = this.graphScrollRef?.nativeElement;
     if (!el) return;
 
     if (this.isHorizontal) {
       // Horizontal: center in graph-scroll
-      const x = this.nodeX(node.row, node.col);
-      el.scrollTo({ left: Math.max(0, x - el.clientWidth / 2), behavior: 'smooth' });
+      const x = this.nodeX(node.row, node.col) * this.zoom;
+      el.scrollTo({ left: Math.max(0, x - el.clientWidth / 2), behavior });
 
       // Vertical: find scrollable ancestor, center the lane
       const hostEl = this.hostEl.nativeElement as HTMLElement;
@@ -405,7 +405,7 @@ export class CommitGraphComponent implements OnChanges {
           const hostRect = hostEl.getBoundingClientRect();
           const parentRect = parent.getBoundingClientRect();
           const graphTop = hostRect.top - parentRect.top + parent.scrollTop;
-          parent.scrollTo({ top: Math.max(0, graphTop + y - parent.clientHeight / 2), behavior: 'smooth' });
+          parent.scrollTo({ top: Math.max(0, graphTop + y - parent.clientHeight / 2), behavior });
           break;
         }
         parent = parent.parentElement;
@@ -422,7 +422,7 @@ export class CommitGraphComponent implements OnChanges {
           const hostRect = hostEl.getBoundingClientRect();
           const parentRect = parent.getBoundingClientRect();
           const graphTop = hostRect.top - parentRect.top + parent.scrollTop;
-          parent.scrollTo({ top: Math.max(0, graphTop + y - parent.clientHeight / 2), behavior: 'smooth' });
+          parent.scrollTo({ top: Math.max(0, graphTop + y - parent.clientHeight / 2), behavior });
           break;
         }
         parent = parent.parentElement;
