@@ -34,7 +34,8 @@
             <span
               class="lane-status-badge"
               [class.lane-status-merged]="s.isMerged"
-              [class.lane-status-ahead]="!s.isMerged">
+              [class.lane-status-ahead]="!s.isMerged"
+              [title]="s.tooltip">
               {{ s.label }}
             </span>
           }

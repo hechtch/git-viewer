@@ -21,6 +21,7 @@ interface StatusBadge {
   label: string;
   width: number;
   isMerged: boolean;
+  tooltip: string;
 }
 
 interface RenderNode extends LayoutNode {
@@ -32,6 +33,26 @@ export interface LaneLabel {
   col: number;
   color: string;
   merged?: boolean;
+}
+
+function buildStatusTooltip(info: BranchInfo): string {
+  if (info.ahead === 0) return 'Merged into trunk';
+  const lines: string[] = [];
+  const a = info.ahead ?? 0;
+  const b = info.behind ?? 0;
+  lines.push(`${a} commit${a === 1 ? '' : 's'} ahead of trunk`);
+  if (b > 0) lines.push(`${b} commit${b === 1 ? '' : 's'} behind trunk`);
+  if (!info.upstream) {
+    lines.push('Not pushed to any remote');
+  } else if ((info.localAhead ?? 0) > 0) {
+    const u = info.localAhead!;
+    lines.push(`${u} commit${u === 1 ? '' : 's'} not pushed to ${info.upstream}`);
+  }
+  if ((info.localBehind ?? 0) > 0) {
+    const d = info.localBehind!;
+    lines.push(`${d} commit${d === 1 ? '' : 's'} on remote not yet fetched`);
+  }
+  return lines.join('\n');
 }
 
 @Component({
@@ -562,7 +583,8 @@ export class CommitGraphComponent implements OnChanges {
           if (info && info.ahead !== undefined) {
             const isMerged = info.ahead === 0;
             const label = isMerged ? 'merged' : `▲${info.ahead}${info.behind ? ' ▼' + info.behind : ''}`;
-            this.laneStatus.set(node.col, { label, width: label.length * this.CHAR_WIDTH + this.BADGE_PAD, isMerged });
+            const tooltip = buildStatusTooltip(info);
+            this.laneStatus.set(node.col, { label, width: label.length * this.CHAR_WIDTH + this.BADGE_PAD, isMerged, tooltip });
             break;
           }
         }
