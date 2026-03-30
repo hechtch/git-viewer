@@ -93,13 +93,6 @@
   display: block;
 }
 
-.td-lane-label {
-  font-size: 11px;
-  font-family: monospace;
-  font-weight: 600;
-  pointer-events: none;
-}
-
 .lane-guides line {
   pointer-events: none;
 }

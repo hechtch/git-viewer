@@ -44,8 +44,7 @@ export class CommitGraphComponent implements OnChanges {
   @Input() branches: BranchInfo[] = [];
   @Input() showMerged = true;
   @Input() jumpToBranch: string | null = null;
-  @Input() viewMode: 'lr' | 'td' = 'lr';
-  @Input() reversed = false;
+  @Input() viewMode: 'lr' | 'rl' | 'td' | 'bu' = 'lr';
   @Output() commitSelected = new EventEmitter<string>();
 
   readonly COMMIT_SPACING = 60;
@@ -54,8 +53,6 @@ export class CommitGraphComponent implements OnChanges {
   readonly MARGIN = 36;
   readonly CHAR_WIDTH = 7;
   readonly BADGE_PAD = 12;
-  // Extra space at the start of the time axis in TD mode for lane labels
-  readonly TD_LABEL_OFFSET = 28;
 
   @ViewChild('graphScroll') graphScrollRef: ElementRef<HTMLElement> | undefined;
   private hostEl = inject(ElementRef<HTMLElement>);
@@ -98,8 +95,7 @@ export class CommitGraphComponent implements OnChanges {
   }
 
   ngOnChanges(changes: SimpleChanges): void {
-    if (changes['entries'] || changes['branches'] || changes['showMerged'] ||
-        changes['viewMode'] || changes['reversed']) {
+    if (changes['entries'] || changes['branches'] || changes['showMerged'] || changes['viewMode']) {
       const nodes = computeLayout(this.entries);
       this._maxCol = 0;
       for (const n of nodes) {
@@ -128,13 +124,18 @@ export class CommitGraphComponent implements OnChanges {
 
   // ── Position helpers ──────────────────────────────────────────────────────
 
+  /** True for LR/RL (horizontal time axis); false for TD/BU (vertical time axis). */
+  get isHorizontal(): boolean { return this.viewMode === 'lr' || this.viewMode === 'rl'; }
+
+  /** True when the position formula needs (maxRow - row) so row 0 (newest) lands at the far end. */
+  private get isReversed(): boolean { return this.viewMode === 'lr' || this.viewMode === 'bu'; }
+
   /** Position along the time axis (commits). Row 0 = newest. */
   private timePos(row: number): number {
     const maxRow = this.entries.length - 1;
-    const offset = this.viewMode === 'td' ? this.MARGIN + this.TD_LABEL_OFFSET : this.MARGIN;
-    return this.reversed
-      ? (maxRow - row) * this.COMMIT_SPACING + offset
-      : row * this.COMMIT_SPACING + offset;
+    return this.isReversed
+      ? (maxRow - row) * this.COMMIT_SPACING + this.MARGIN
+      : row * this.COMMIT_SPACING + this.MARGIN;
   }
 
   /** Position along the lane axis (branches). */
@@ -142,14 +143,14 @@ export class CommitGraphComponent implements OnChanges {
     return col * this.LANE_HEIGHT + this.MARGIN;
   }
 
-  /** Node X: time axis in LR, lane axis in TD. */
+  /** Node X: time axis in LR/RL, lane axis in TD/BU. */
   nodeX(row: number, col: number): number {
-    return this.viewMode === 'lr' ? this.timePos(row) : this.lanePos(col);
+    return this.isHorizontal ? this.timePos(row) : this.lanePos(col);
   }
 
-  /** Node Y: lane axis in LR, time axis in TD. */
+  /** Node Y: lane axis in LR/RL, time axis in TD/BU. */
   nodeY(row: number, col: number): number {
-    return this.viewMode === 'lr' ? this.lanePos(col) : this.timePos(row);
+    return this.isHorizontal ? this.lanePos(col) : this.timePos(row);
   }
 
   /** The lane's position on its primary axis (Y in LR, X in TD). */
@@ -159,31 +160,39 @@ export class CommitGraphComponent implements OnChanges {
 
   // Badge positioning helpers
   badgeRectX(row: number, col: number, badgeWidth: number, i: number): number {
-    if (this.viewMode === 'lr') return this.nodeX(row, col) - badgeWidth / 2;
-    return this.nodeX(row, col) + this.NODE_RADIUS + 6;
+    return this.isHorizontal
+      ? this.nodeX(row, col) - badgeWidth / 2
+      : this.nodeX(row, col) + this.NODE_RADIUS + 6;
   }
   badgeRectY(row: number, col: number, i: number): number {
-    if (this.viewMode === 'lr') return this.nodeY(row, col) - 26 - i * 20;
-    return this.nodeY(row, col) - 8 + i * 20;
+    return this.isHorizontal
+      ? this.nodeY(row, col) - 26 - i * 20
+      : this.nodeY(row, col) - 8 + i * 20;
   }
   badgeTextX(row: number, col: number, i: number): number {
-    if (this.viewMode === 'lr') return this.nodeX(row, col);
-    return this.nodeX(row, col) + this.NODE_RADIUS + 6 + 6;
+    return this.isHorizontal
+      ? this.nodeX(row, col)
+      : this.nodeX(row, col) + this.NODE_RADIUS + 12;
   }
   badgeTextY(row: number, col: number, i: number): number {
-    if (this.viewMode === 'lr') return this.nodeY(row, col) - 14 - i * 20;
-    return this.nodeY(row, col) + 4 + i * 20;
+    return this.isHorizontal
+      ? this.nodeY(row, col) - 14 - i * 20
+      : this.nodeY(row, col) + 4 + i * 20;
   }
-  get badgeTextAnchor(): string { return this.viewMode === 'lr' ? 'middle' : 'start'; }
+  get badgeTextAnchor(): string { return this.isHorizontal ? 'middle' : 'start'; }
 
   // Hash label helpers
   hashLabelX(row: number, col: number): number {
-    return this.viewMode === 'lr' ? this.nodeX(row, col) : this.nodeX(row, col) + this.NODE_RADIUS + 4;
+    return this.isHorizontal
+      ? this.nodeX(row, col)
+      : this.nodeX(row, col) + this.NODE_RADIUS + 4;
   }
   hashLabelY(row: number, col: number): number {
-    return this.viewMode === 'lr' ? this.nodeY(row, col) + 18 : this.nodeY(row, col) + 4;
+    return this.isHorizontal
+      ? this.nodeY(row, col) + 18
+      : this.nodeY(row, col) + 4;
   }
-  get hashTextAnchor(): string { return this.viewMode === 'lr' ? 'middle' : 'start'; }
+  get hashTextAnchor(): string { return this.isHorizontal ? 'middle' : 'start'; }
 
   // ── Interaction ───────────────────────────────────────────────────────────
 
@@ -208,17 +217,23 @@ export class CommitGraphComponent implements OnChanges {
     }
 
     let target: RenderNode | undefined;
-    // In TD mode, Up/Down navigate along time; Left/Right navigate across lanes.
-    // In LR mode, Left/Right navigate time; Up/Down navigate lanes.
-    const isTD = this.viewMode === 'td';
 
-    const newerKey   = isTD ? 'ArrowUp'    : 'ArrowRight';
-    const olderKey   = isTD ? 'ArrowDown'  : 'ArrowLeft';
-    const laneUpKey  = isTD ? 'ArrowLeft'  : 'ArrowUp';
-    const laneDnKey  = isTD ? 'ArrowRight' : 'ArrowDown';
+    // Arrow keys follow visual direction:
+    //   LR: Right=newer, Left=older, Up/Down=cross-lane
+    //   RL: Left=newer,  Right=older, Up/Down=cross-lane
+    //   TD: Up=newer,    Down=older,  Left/Right=cross-lane
+    //   BU: Down=newer,  Up=older,    Left/Right=cross-lane
+    const keyMap: Record<string, 'newer' | 'older' | 'laneUp' | 'laneDn'> = {
+      lr: { ArrowRight: 'newer', ArrowLeft: 'older',  ArrowUp: 'laneUp', ArrowDown: 'laneDn' },
+      rl: { ArrowLeft:  'newer', ArrowRight: 'older', ArrowUp: 'laneUp', ArrowDown: 'laneDn' },
+      td: { ArrowUp:    'newer', ArrowDown: 'older',  ArrowLeft: 'laneUp', ArrowRight: 'laneDn' },
+      bu: { ArrowDown:  'newer', ArrowUp:   'older',  ArrowLeft: 'laneUp', ArrowRight: 'laneDn' },
+    }[this.viewMode] as Record<string, 'newer' | 'older' | 'laneUp' | 'laneDn'>;
 
-    switch (event.key) {
-      case newerKey:
+    const action = keyMap[event.key];
+
+    switch (action) {
+      case 'newer':
         target = this.findNeighborInLane(selected, -1);
         if (!target) {
           const lane = this.laneLabels.find(l => l.col === selected.col);
@@ -226,7 +241,7 @@ export class CommitGraphComponent implements OnChanges {
         }
         break;
 
-      case olderKey: {
+      case 'older': {
         target = this.findNeighborInLane(selected, 1);
         if (!target) {
           if (selected.col !== 0 && selected.entry.parents.length > 0) {
@@ -239,24 +254,27 @@ export class CommitGraphComponent implements OnChanges {
         break;
       }
 
-      case laneUpKey:
+      case 'laneUp':
         target = this.findCrossLaneNeighbor(selected, -1);
         break;
 
-      case laneDnKey:
+      case 'laneDn':
         target = this.findCrossLaneNeighbor(selected, +1);
         break;
 
-      case '+': case '=':
-        if (event.ctrlKey || event.metaKey) return;
-        this.adjustZoom(this.ZOOM_STEP); event.preventDefault(); return;
-      case '-':
-        if (event.ctrlKey || event.metaKey) return;
-        this.adjustZoom(-this.ZOOM_STEP); event.preventDefault(); return;
-      case '0':
-        if (event.ctrlKey || event.metaKey) { this.zoom = 1.0; event.preventDefault(); }
-        return;
       default:
+        // Not a nav action — check zoom keys
+        if (event.key === '+' || event.key === '=') {
+          if (event.ctrlKey || event.metaKey) return;
+          this.adjustZoom(this.ZOOM_STEP); event.preventDefault(); return;
+        }
+        if (event.key === '-') {
+          if (event.ctrlKey || event.metaKey) return;
+          this.adjustZoom(-this.ZOOM_STEP); event.preventDefault(); return;
+        }
+        if (event.key === '0' && (event.ctrlKey || event.metaKey)) {
+          this.zoom = 1.0; event.preventDefault();
+        }
         return;
     }
 
@@ -291,7 +309,7 @@ export class CommitGraphComponent implements OnChanges {
     const el = this.graphScrollRef?.nativeElement;
     if (!el) return;
 
-    if (this.viewMode === 'lr') {
+    if (this.isHorizontal) {
       // Horizontal: center in graph-scroll
       const x = this.nodeX(node.row, node.col);
       el.scrollTo({ left: Math.max(0, x - el.clientWidth / 2), behavior: 'smooth' });
@@ -313,9 +331,22 @@ export class CommitGraphComponent implements OnChanges {
         parent = parent.parentElement;
       }
     } else {
-      // TD: scroll graph-scroll vertically to center the node's row
-      const y = this.nodeY(node.row, node.col) * this.zoom;
-      el.scrollTo({ top: Math.max(0, y - el.clientHeight / 2), behavior: 'smooth' });
+      // TD/BU: find scrollable ancestor (graph-scroll is not height-constrained), center the node
+      const hostEl = this.hostEl.nativeElement as HTMLElement;
+      let parent: HTMLElement | null = hostEl.parentElement;
+      while (parent) {
+        const style = window.getComputedStyle(parent);
+        if ((style.overflow + ' ' + style.overflowY).includes('auto') ||
+            (style.overflow + ' ' + style.overflowY).includes('scroll')) {
+          const y = this.nodeY(node.row, node.col) * this.zoom;
+          const hostRect = hostEl.getBoundingClientRect();
+          const parentRect = parent.getBoundingClientRect();
+          const graphTop = hostRect.top - parentRect.top + parent.scrollTop;
+          parent.scrollTo({ top: Math.max(0, graphTop + y - parent.clientHeight / 2), behavior: 'smooth' });
+          break;
+        }
+        parent = parent.parentElement;
+      }
     }
   }
 
@@ -446,7 +477,7 @@ export class CommitGraphComponent implements OnChanges {
     const x2 = this.nodeX(edge.toRow, edge.toCol);
     const y2 = this.nodeY(edge.toRow, edge.toCol);
 
-    if (this.viewMode === 'lr') {
+    if (this.isHorizontal) {
       if (y1 === y2) return `M ${x1} ${y1} L ${x2} ${y2}`;
       const midX = (x1 + x2) / 2;
       return `M ${x1} ${y1} C ${midX} ${y1}, ${midX} ${y2}, ${x2} ${y2}`;
@@ -458,13 +489,12 @@ export class CommitGraphComponent implements OnChanges {
   }
 
   private computeDimensions(): void {
-    const tdLabelSpace = this.TD_LABEL_OFFSET;
-    if (this.viewMode === 'lr') {
+    if (this.isHorizontal) {
       this.svgWidth = this.entries.length * this.COMMIT_SPACING + this.MARGIN * 2;
       this.svgHeight = (this._maxCol + 1) * this.LANE_HEIGHT + this.MARGIN * 2;
     } else {
       this.svgWidth = (this._maxCol + 1) * this.LANE_HEIGHT + this.MARGIN * 2;
-      this.svgHeight = this.entries.length * this.COMMIT_SPACING + this.MARGIN * 2 + tdLabelSpace;
+      this.svgHeight = this.entries.length * this.COMMIT_SPACING + this.MARGIN * 2;
     }
   }
 }

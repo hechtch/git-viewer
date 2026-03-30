@@ -3,10 +3,10 @@
     <div class="toast">{{ toastMessage }}</div>
   }
 </div>
-<div class="graph-container" [class.mode-td]="viewMode === 'td'" [class.show-hover]="showMouseHover" (mousemove)="onMouseMove()">
+<div class="graph-container" [class.mode-td]="!isHorizontal" [class.show-hover]="showMouseHover" (mousemove)="onMouseMove()">
 
   <!-- LR mode: pinned lane labels on the left -->
-  @if (viewMode === 'lr') {
+  @if (isHorizontal) {
     <div class="lane-labels" [style.height.px]="svgHeight * zoom">
       @for (lane of laneLabels; track lane) {
         <div
@@ -42,27 +42,10 @@
       [attr.viewBox]="'0 0 ' + svgWidth + ' ' + svgHeight"
       class="graph-svg">
 
-      <!-- TD mode: lane labels inside SVG at top of each column -->
-      @if (viewMode === 'td') {
-        <g class="td-lane-labels">
-          @for (lane of laneLabels; track lane) {
-            <text
-              [attr.x]="lanePrimaryPos(lane.col)"
-              [attr.y]="MARGIN / 2 + 4"
-              class="td-lane-label"
-              text-anchor="middle"
-              [attr.fill]="lane.color"
-              [style.opacity]="!showMerged && lane.merged ? 0.25 : 1">
-              {{ lane.name }}
-            </text>
-          }
-        </g>
-      }
-
       <!-- Lane background rows (LR) or columns (TD) -->
       <g class="lane-rows">
         @for (lane of laneLabels; track lane) {
-          @if (viewMode === 'lr') {
+          @if (isHorizontal) {
             <rect
               x="0"
               [attr.y]="lanePrimaryPos(lane.col) - LANE_HEIGHT / 2"
@@ -91,7 +74,7 @@
       <!-- Lane guide lines -->
       <g class="lane-guides">
         @for (lane of laneLabels; track lane) {
-          @if (viewMode === 'lr') {
+          @if (isHorizontal) {
             <line
               x1="0" [attr.y1]="lanePrimaryPos(lane.col)"
               [attr.x2]="svgWidth" [attr.y2]="lanePrimaryPos(lane.col)"
@@ -116,7 +99,7 @@
       @for (node of renderNodes; track node) {
         <g>
           <!-- Hit target: vertical stripe (LR) or horizontal stripe (TD) -->
-          @if (viewMode === 'lr') {
+          @if (isHorizontal) {
             <rect
               [attr.x]="nodeX(node.row, node.col) - COMMIT_SPACING / 2"
               y="0"

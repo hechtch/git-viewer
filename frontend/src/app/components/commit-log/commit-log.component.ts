@@ -13,6 +13,7 @@ interface CommitRow extends CommitSummary {
     imports: [CommonModule, FormsModule, CommitGraphComponent],
     template: `
     <div class="commit-log">
+      <div class="log-sticky">
       <div class="log-header">
         @if (branch) {
           <span class="viewing-label">
@@ -35,10 +36,11 @@ interface CommitRow extends CommitSummary {
         @if (!branch) {
           <div class="graph-controls">
             <div class="btn-group">
-              <button class="view-btn" [class.active]="viewMode === 'lr'" (click)="viewMode = 'lr'" title="Left-to-right">↔ LR</button>
-              <button class="view-btn" [class.active]="viewMode === 'td'" (click)="viewMode = 'td'" title="Top-down">↕ TD</button>
+              <button class="view-btn" [class.active]="viewMode === 'lr'" (click)="viewMode = 'lr'" title="Left to right">→ LR</button>
+              <button class="view-btn" [class.active]="viewMode === 'rl'" (click)="viewMode = 'rl'" title="Right to left">← RL</button>
+              <button class="view-btn" [class.active]="viewMode === 'td'" (click)="viewMode = 'td'" title="Top down">↓ TD</button>
+              <button class="view-btn" [class.active]="viewMode === 'bu'" (click)="viewMode = 'bu'" title="Bottom up">↑ BU</button>
             </div>
-            <button class="view-btn" [class.active]="reversed" (click)="reversed = !reversed" title="Reverse direction">⇄ Rev</button>
             <button class="toggle-merged-btn" (click)="showMerged = !showMerged">
               {{ showMerged ? 'Hide merged' : 'Show merged' }}
             </button>
@@ -57,7 +59,8 @@ interface CommitRow extends CommitSummary {
           <span class="search-error">{{ searchError }}</span>
         }
       </div>
-    
+      </div>
+
       <!-- Graph view for "All branches" -->
       @if (!branch && visibleGraphEntries.length) {
         <app-commit-graph
@@ -65,7 +68,6 @@ interface CommitRow extends CommitSummary {
           [branches]="visibleBranchInfos"
           [showMerged]="showMerged"
           [viewMode]="viewMode"
-          [reversed]="reversed"
           [jumpToBranch]="jumpToBranch"
           (commitSelected)="selectCommit($event)">
         </app-commit-graph>
@@ -108,6 +110,13 @@ interface CommitRow extends CommitSummary {
     `,
     styles: [`
     .commit-log { padding: 12px; }
+    .log-sticky {
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      background: #1e1e2e;
+      padding-bottom: 4px;
+    }
     .log-header {
       display: flex;
       align-items: center;
@@ -185,13 +194,12 @@ interface CommitRow extends CommitSummary {
     .btn-group {
       display: flex;
     }
-    .btn-group .view-btn:first-child {
-      border-radius: 3px 0 0 3px;
+    .btn-group .view-btn {
+      border-radius: 0;
       border-right-width: 0;
     }
-    .btn-group .view-btn:last-child {
-      border-radius: 0 3px 3px 0;
-    }
+    .btn-group .view-btn:first-child { border-radius: 3px 0 0 3px; }
+    .btn-group .view-btn:last-child  { border-radius: 0 3px 3px 0; border-right-width: 1px; }
     .view-btn {
       font-size: 10px;
       color: #6c7086;
@@ -217,7 +225,6 @@ interface CommitRow extends CommitSummary {
       display: flex;
       align-items: center;
       gap: 8px;
-      margin-bottom: 8px;
     }
     .search-input {
       flex: 1;
@@ -249,8 +256,7 @@ export class CommitLogComponent implements OnChanges {
   currentBranch = '';
   selectedSha = '';
   showMerged = true;
-  viewMode: 'lr' | 'td' = 'lr';
-  reversed = false;
+  viewMode: 'lr' | 'rl' | 'td' | 'bu' = 'lr';
   searchQuery = '';
   searchError = '';
   private searchRegex: RegExp | null = null;
