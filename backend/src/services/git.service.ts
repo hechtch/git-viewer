@@ -101,7 +101,7 @@ export class GitService {
 
     const [localBranches, remoteBranches] = await Promise.all([
       Promise.all(parsed.map(async (b) => ({ ...await resolveLocalPushStatus(b), ...await computeAheadBehind(b.name) }))),
-      Promise.all(remotes.map(async (r) => ({ ...r, ...await computeAheadBehind(r.name) }))),
+      Promise.all(remotes.map(async (r) => ({ ...r, isRemote: true, ...await computeAheadBehind(r.name) }))),
     ]);
 
     return { branches: [...localBranches, ...remoteBranches], current };
@@ -272,6 +272,7 @@ export interface BranchInfo {
   upstream?: string;   // remote tracking ref, e.g. "origin/main"; undefined = no remote
   localAhead?: number; // unpushed commits (local commits not on remote)
   localBehind?: number;// commits on remote not yet fetched locally
+  isRemote?: boolean;  // true for refs/remotes/* entries
 }
 
 export interface CommitSummary {

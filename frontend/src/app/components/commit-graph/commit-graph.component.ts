@@ -43,15 +43,17 @@ function buildStatusTooltip(info: BranchInfo): string {
   const b = info.behind ?? 0;
   lines.push(`${a} commit${a === 1 ? '' : 's'} ahead of trunk`);
   if (b > 0) lines.push(`${b} commit${b === 1 ? '' : 's'} behind trunk`);
-  if (!info.upstream) {
-    lines.push('Not pushed to any remote');
-  } else if ((info.localAhead ?? 0) > 0) {
-    const u = info.localAhead!;
-    lines.push(`${u} commit${u === 1 ? '' : 's'} not pushed to ${info.upstream}`);
-  }
-  if ((info.localBehind ?? 0) > 0) {
-    const d = info.localBehind!;
-    lines.push(`${d} commit${d === 1 ? '' : 's'} on remote not yet fetched`);
+  if (!info.isRemote) {
+    if (!info.upstream) {
+      lines.push('Not pushed to any remote');
+    } else if ((info.localAhead ?? 0) > 0) {
+      const u = info.localAhead!;
+      lines.push(`${u} commit${u === 1 ? '' : 's'} not pushed to ${info.upstream}`);
+    }
+    if ((info.localBehind ?? 0) > 0) {
+      const d = info.localBehind!;
+      lines.push(`${d} commit${d === 1 ? '' : 's'} on remote not yet fetched`);
+    }
   }
   return lines.join('\n');
 }
@@ -583,7 +585,14 @@ export class CommitGraphComponent implements OnChanges {
       });
 
       if (!this.laneStatus.has(node.col)) {
-        for (const ref of node.entry.refs) {
+        // Prefer local branches over remote refs when multiple refs share a commit,
+        // so the tooltip shows accurate push status from the local branch's perspective.
+        const refs = [...node.entry.refs].sort((a, b) => {
+          const aInfo = branchMap.get(a.replace('HEAD -> ', ''));
+          const bInfo = branchMap.get(b.replace('HEAD -> ', ''));
+          return Number(aInfo?.isRemote ?? true) - Number(bInfo?.isRemote ?? true);
+        });
+        for (const ref of refs) {
           const name = ref.replace('HEAD -> ', '');
           const info = branchMap.get(name);
           if (info && info.ahead !== undefined) {

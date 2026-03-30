@@ -13,6 +13,7 @@ export interface BranchInfo {
   upstream?: string;   // remote tracking ref e.g. "origin/main"; undefined = no remote
   localAhead?: number; // unpushed commits (local commits not on remote)
   localBehind?: number;// commits on remote not yet fetched locally
+  isRemote?: boolean;  // true for refs/remotes/* entries
 }
 
 export interface BranchesResponse {
