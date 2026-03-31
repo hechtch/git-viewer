@@ -1,0 +1,166 @@
+.landing {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  background: #1e1e2e;
+  color: #cdd6f4;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+.landing-content {
+  width: 540px;
+  max-width: 95vw;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.app-title {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.title-icon {
+  font-size: 36px;
+  color: #89b4fa;
+}
+
+h1 {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 600;
+  color: #cdd6f4;
+}
+
+h2 {
+  margin: 0 0 12px 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: #6c7086;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.repo-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.repo-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: #24273a;
+  border: 1px solid #313244;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.1s, border-color 0.1s;
+  position: relative;
+}
+
+.repo-item:hover:not(.disabled) {
+  background: #313244;
+  border-color: #45475a;
+}
+
+.repo-item.loading {
+  background: #313244;
+}
+
+.repo-item.disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.repo-icon {
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.repo-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.repo-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #cdd6f4;
+}
+
+.repo-path {
+  font-size: 11px;
+  color: #6c7086;
+  font-family: monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.repo-date {
+  font-size: 11px;
+  color: #45475a;
+  flex-shrink: 0;
+}
+
+.spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid #45475a;
+  border-top-color: #89b4fa;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.empty-state {
+  text-align: center;
+  padding: 32px;
+  background: #24273a;
+  border: 1px solid #313244;
+  border-radius: 8px;
+  color: #6c7086;
+  font-size: 13px;
+}
+
+.empty-state p { margin: 0; }
+
+.error {
+  padding: 10px 14px;
+  background: rgba(243,139,168,0.12);
+  border: 1px solid #f38ba8;
+  border-radius: 6px;
+  color: #f38ba8;
+  font-size: 13px;
+}
+
+.open-btn {
+  padding: 10px 20px;
+  background: transparent;
+  color: #89b4fa;
+  border: 1px solid #89b4fa;
+  border-radius: 6px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.1s;
+  align-self: flex-start;
+}
+
+.open-btn:hover {
+  background: rgba(137,180,250,0.1);
+}

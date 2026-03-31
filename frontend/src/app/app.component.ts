@@ -1,5 +1,6 @@
 import { Component, OnInit, HostListener, inject } from '@angular/core';
 import { GitApiService } from './services/git-api.service';
+import { LandingComponent } from './components/landing/landing.component';
 import { RepoSelectorComponent } from './components/repo-selector/repo-selector.component';
 import { RepoStatusComponent } from './components/repo-status/repo-status.component';
 import { BranchListComponent } from './components/branch-list/branch-list.component';
@@ -13,6 +14,7 @@ import { FileTreeComponent } from './components/file-tree/file-tree.component';
     styleUrls: ['./app.component.css'],
     standalone: true,
     imports: [
+        LandingComponent,
         RepoSelectorComponent,
         RepoStatusComponent,
         BranchListComponent,
@@ -51,11 +53,11 @@ export class AppComponent implements OnInit {
   ngOnInit(): void {
     this.api.getRepo().subscribe({
       next: (info) => {
+        // info.path is null when no repo is selected — landing page handles that
         this.repoPath = info.path;
       },
       error: () => {
-        // Backend unreachable or no repo configured — show selector
-        this.showSelector = true;
+        // Backend unreachable — landing page shown (repoPath stays null)
       }
     });
   }

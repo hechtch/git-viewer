@@ -1,6 +1,13 @@
-@if (showSelector || repoPath === null) {
+@if (repoPath === null && !showSelector) {
+  <app-landing
+    (repoOpened)="onRepoOpened($event)"
+    (openSelector)="showSelector = true">
+  </app-landing>
+}
+
+@if (showSelector) {
   <app-repo-selector
-    [canCancel]="repoPath !== null"
+    [canCancel]="true"
     [initialPath]="repoPath || ''"
     (repoOpened)="onRepoOpened($event)">
   </app-repo-selector>

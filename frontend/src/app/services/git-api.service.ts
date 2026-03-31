@@ -60,7 +60,13 @@ export interface GraphEntry {
 }
 
 export interface RepoInfo {
+  path: string | null;
+}
+
+export interface RecentRepo {
   path: string;
+  name: string;
+  lastOpened: string;
 }
 
 export interface BrowseEntry {
@@ -103,6 +109,10 @@ export class GitApiService {
 
   setRepo(path: string): Observable<RepoInfo> {
     return this.http.post<RepoInfo>(`${this.base}/repo`, { path });
+  }
+
+  getRecentRepos(): Observable<RecentRepo[]> {
+    return this.http.get<RecentRepo[]>(`${this.base}/recent-repos`);
   }
 
   getBranches(): Observable<BranchesResponse> {
