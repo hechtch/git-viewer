@@ -46,6 +46,7 @@ export class AppComponent implements OnInit {
   selectedBranch: string | null = null;
   selectedCommit: string | null = null;
   activeTab: 'timeline' | 'commits' | 'files' = 'timeline';
+  refreshTick = 0;
 
   ngOnInit(): void {
     this.api.getRepo().subscribe({
@@ -70,6 +71,10 @@ export class AppComponent implements OnInit {
 
   openSelector(): void {
     this.showSelector = true;
+  }
+
+  onRefreshed(): void {
+    this.refreshTick++;
   }
 
   onBranchSelected(branch: string | null): void {

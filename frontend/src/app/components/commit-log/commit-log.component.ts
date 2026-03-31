@@ -66,6 +66,7 @@ interface CommitRow extends CommitSummary {
         <app-commit-graph
           [entries]="visibleGraphEntries"
           [branches]="visibleBranchInfos"
+          [currentBranch]="currentBranch"
           [showMerged]="showMerged"
           [viewMode]="viewMode"
           [jumpToBranch]="jumpToBranch"
@@ -248,6 +249,7 @@ export class CommitLogComponent implements OnChanges {
   @Input() branch: string | null = null;
   @Input() repoPath: string | null = null;
   @Input() jumpToBranch: string | null = null;
+  @Input() refreshTick = 0;
   @Output() commitSelected = new EventEmitter<string>();
 
   commits: CommitRow[] = [];
@@ -307,7 +309,7 @@ export class CommitLogComponent implements OnChanges {
   private refMap = new Map<string, string[]>();
 
   ngOnChanges(changes: SimpleChanges): void {
-    if (changes['branch'] || changes['repoPath']) {
+    if (changes['branch'] || changes['repoPath'] || changes['refreshTick']) {
       this.loadCommits();
     }
   }

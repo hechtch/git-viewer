@@ -6,6 +6,7 @@ import { computeLayout, LayoutNode, LayoutEdge } from './graph-layout';
 interface RenderEdge {
   path: string;
   color: string;
+  merged: boolean;
 }
 
 interface RefBadge {
@@ -18,8 +19,10 @@ interface RefBadge {
 
 interface StatusBadge {
   label: string;
+  localAhead: number;  // unpushed commits to show in yellow; 0 = none
   width: number;
   isMerged: boolean;
+  tooltip: string;
 }
 
 interface RenderNode extends LayoutNode {
@@ -31,6 +34,29 @@ export interface LaneLabel {
   col: number;
   color: string;
   merged?: boolean;
+  isCurrent?: boolean;
+}
+
+function buildStatusTooltip(info: BranchInfo): string {
+  if (info.ahead === 0) return 'Merged into trunk';
+  const lines: string[] = [];
+  const a = info.ahead ?? 0;
+  const b = info.behind ?? 0;
+  lines.push(`${a} commit${a === 1 ? '' : 's'} ahead of trunk`);
+  if (b > 0) lines.push(`${b} commit${b === 1 ? '' : 's'} behind trunk`);
+  if (!info.isRemote) {
+    if (!info.upstream) {
+      lines.push('Not pushed to any remote');
+    } else if ((info.localAhead ?? 0) > 0) {
+      const u = info.localAhead!;
+      lines.push(`${u} commit${u === 1 ? '' : 's'} not pushed to ${info.upstream}`);
+    }
+    if ((info.localBehind ?? 0) > 0) {
+      const d = info.localBehind!;
+      lines.push(`${d} commit${d === 1 ? '' : 's'} on remote not yet fetched`);
+    }
+  }
+  return lines.join('\n');
 }
 
 @Component({
@@ -42,6 +68,7 @@ export interface LaneLabel {
 export class CommitGraphComponent implements OnChanges {
   @Input() entries: GraphEntry[] = [];
   @Input() branches: BranchInfo[] = [];
+  @Input() currentBranch = '';
   @Input() showMerged = true;
   @Input() jumpToBranch: string | null = null;
   @Input() viewMode: 'lr' | 'rl' | 'td' | 'bu' = 'lr';
@@ -50,7 +77,7 @@ export class CommitGraphComponent implements OnChanges {
   readonly COMMIT_SPACING = 60;
   readonly LANE_HEIGHT = 44;
   readonly NODE_RADIUS = 5;
-  readonly MARGIN = 36;
+  readonly MARGIN = 72;
   readonly CHAR_WIDTH = 7;
   readonly BADGE_PAD = 12;
 
@@ -61,6 +88,7 @@ export class CommitGraphComponent implements OnChanges {
   allEdges: RenderEdge[] = [];
   laneLabels: LaneLabel[] = [];
   laneStatus = new Map<number, StatusBadge>();
+  mergedCols = new Set<number>();
   selectedSha = '';
   selectedCol = -1;
   toastMessage = '';
@@ -98,7 +126,7 @@ export class CommitGraphComponent implements OnChanges {
   }
 
   ngOnChanges(changes: SimpleChanges): void {
-    if (changes['entries'] || changes['branches'] || changes['showMerged'] || changes['viewMode']) {
+    if (changes['entries'] || changes['branches'] || changes['currentBranch'] || changes['showMerged'] || changes['viewMode']) {
       const nodes = computeLayout(this.entries);
       this._maxCol = 0;
       for (const n of nodes) {
@@ -525,7 +553,11 @@ export class CommitGraphComponent implements OnChanges {
       if (labelMap.has(node.col)) continue;
       if (node.entry.refs.length > 0) {
         const name = node.entry.refs[0].replace('HEAD -> ', '');
-        labelMap.set(node.col, { name, col: node.col, color: node.color, merged: mergedSet.has(name) });
+        labelMap.set(node.col, {
+          name, col: node.col, color: node.color,
+          merged: mergedSet.has(name),
+          isCurrent: name === this.currentBranch,
+        });
       }
     }
     for (const node of nodes) {
@@ -554,13 +586,22 @@ export class CommitGraphComponent implements OnChanges {
       });
 
       if (!this.laneStatus.has(node.col)) {
-        for (const ref of node.entry.refs) {
+        // Prefer local branches over remote refs when multiple refs share a commit,
+        // so the tooltip shows accurate push status from the local branch's perspective.
+        const refs = [...node.entry.refs].sort((a, b) => {
+          const aInfo = branchMap.get(a.replace('HEAD -> ', ''));
+          const bInfo = branchMap.get(b.replace('HEAD -> ', ''));
+          return Number(aInfo?.isRemote ?? true) - Number(bInfo?.isRemote ?? true);
+        });
+        for (const ref of refs) {
           const name = ref.replace('HEAD -> ', '');
           const info = branchMap.get(name);
-          if (info) {
-            const isMerged = (info.ahead ?? -1) === 0;
+          if (info && info.ahead !== undefined) {
+            const isMerged = info.ahead === 0;
             const label = isMerged ? 'merged' : `▲${info.ahead}${info.behind ? ' ▼' + info.behind : ''}`;
-            this.laneStatus.set(node.col, { label, width: label.length * this.CHAR_WIDTH + this.BADGE_PAD, isMerged });
+            const localAhead = (!info.isRemote && !isMerged) ? (info.localAhead ?? 0) : 0;
+            const tooltip = buildStatusTooltip(info);
+            this.laneStatus.set(node.col, { label, localAhead, width: label.length * this.CHAR_WIDTH + this.BADGE_PAD, isMerged, tooltip });
             break;
           }
         }
@@ -568,13 +609,19 @@ export class CommitGraphComponent implements OnChanges {
 
       return { ...node, badges };
     });
+
+    this.mergedCols.clear();
+    for (const [col, status] of this.laneStatus) {
+      if (status.isMerged) this.mergedCols.add(col);
+    }
   }
 
   private buildEdges(): void {
     this.allEdges = [];
     for (const node of this.renderNodes) {
       for (const edge of node.edges) {
-        this.allEdges.push({ path: this.edgePath(node.row, edge), color: edge.color });
+        const merged = this.mergedCols.has(node.col) && this.mergedCols.has(edge.toCol);
+        this.allEdges.push({ path: this.edgePath(node.row, edge), color: edge.color, merged });
       }
     }
   }

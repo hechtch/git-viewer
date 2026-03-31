@@ -13,10 +13,10 @@
       <span class="repo-path">{{ repoPath }}</span>
       <button class="change-repo-btn" (click)="openSelector()">Change repo</button>
     </div>
-    <app-repo-status></app-repo-status>
+    <app-repo-status (refreshed)="onRefreshed()"></app-repo-status>
     <div class="main-layout">
       <aside class="sidebar">
-        <app-branch-list [repoPath]="repoPath" (branchSelected)="onBranchSelected($event)"></app-branch-list>
+        <app-branch-list [repoPath]="repoPath" [refreshTick]="refreshTick" (branchSelected)="onBranchSelected($event)"></app-branch-list>
       </aside>
       <main class="content" [style.--text-zoom]="contentZoom">
         <div class="tab-bar">
@@ -30,6 +30,7 @@
               <app-commit-log
                 [branch]="null"
                 [repoPath]="repoPath"
+                [refreshTick]="refreshTick"
                 [jumpToBranch]="selectedBranch"
                 (commitSelected)="onCommitSelected($event)">
               </app-commit-log>
@@ -45,6 +46,7 @@
               <app-commit-log
                 [branch]="selectedBranch"
                 [repoPath]="repoPath"
+                [refreshTick]="refreshTick"
                 (commitSelected)="onCommitSelected($event)">
               </app-commit-log>
             </div>

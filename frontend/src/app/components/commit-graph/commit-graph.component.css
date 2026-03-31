@@ -47,7 +47,7 @@
 .graph-container {
   display: flex;
   flex-direction: row;
-  overflow: hidden;
+  overflow: visible;
   position: relative;
 }
 
@@ -56,6 +56,7 @@
   width: 200px;
   position: relative;
   border-right: 1px solid #313244;
+  overflow: visible;
 }
 
 .lane-label-row {
@@ -75,11 +76,19 @@
 }
 
 .lane-label-row-hidden {
-  opacity: 0.25;
+  display: none;
 }
 
 .lane-merged-hidden {
-  opacity: 0.25;
+  display: none;
+}
+
+.lane-label-row-merged {
+  opacity: 0.35;
+}
+
+.merged-dim {
+  opacity: 0.35;
 }
 
 .lane-label {
@@ -152,6 +161,18 @@
   pointer-events: none;
 }
 
+.lane-head-badge {
+  flex-shrink: 0;
+  font-size: 10px;
+  font-family: monospace;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: #a6e3a1;
+  color: #1e1e2e;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
 .lane-status-badge {
   flex-shrink: 0;
   font-size: 10px;
@@ -160,6 +181,27 @@
   border-radius: 3px;
   border: 1px solid;
   white-space: nowrap;
+  position: relative;
+}
+
+.lane-status-badge[data-tooltip]:hover::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: 0;
+  top: calc(100% + 5px);
+  background: #181825;
+  color: #cdd6f4;
+  padding: 7px 12px;
+  border-radius: 6px;
+  border: 1px solid #45475a;
+  font-size: 11px;
+  font-family: monospace;
+  white-space: pre;
+  z-index: 200;
+  pointer-events: none;
+  min-width: 220px;
+  line-height: 1.6;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.5);
 }
 
 .lane-status-merged {
@@ -172,4 +214,9 @@
   color: #a6e3a1;
   background: #313244;
   border-color: #a6e3a1;
+}
+
+.badge-remote-ahead {
+  color: #f9e2af;
+  margin-left: 3px;
 }

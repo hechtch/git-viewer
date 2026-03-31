@@ -29,15 +29,35 @@ export class GitService {
 
   async getBranches(): Promise<{ branches: BranchInfo[]; current: string }> {
     const current = await this.git('branch', '--show-current');
-    const raw = await this.git(
+    const localRaw = await this.git(
       'for-each-ref',
-      '--format=%(refname:short)\t%(objectname:short)\t%(committerdate:iso8601)\t%(subject)',
+      '--format=%(refname:short)\t%(objectname:short)\t%(committerdate:iso8601)\t%(upstream:short)\t%(upstream:track)\t%(subject)',
       'refs/heads/'
     );
-    const parsed = raw.split('\n').filter(Boolean).map((line) => {
-      const [name, sha, date, ...rest] = line.split('\t');
-      return { name, sha, date, subject: rest.join('\t') };
+    const parsed = localRaw.split('\n').filter(Boolean).map((line) => {
+      const parts = line.split('\t');
+      const name = parts[0];
+      const sha = parts[1];
+      const date = parts[2];
+      const upstream = parts[3] || undefined;
+      const upstreamTrack = parts[4] || '';
+      const subject = parts.slice(5).join('\t');
+      const { localAhead, localBehind } = parseUpstreamTrack(upstreamTrack);
+      return { name, sha, date, subject, upstream, localAhead, localBehind };
     });
+
+    // Also fetch remote tracking refs so the graph can determine their merged status.
+    const remoteRaw = await this.git(
+      'for-each-ref',
+      '--format=%(refname:short)\t%(objectname:short)\t%(committerdate:iso8601)\t%(subject)',
+      'refs/remotes/'
+    ).catch(() => '');
+    const remotes = remoteRaw.split('\n').filter(Boolean)
+      .map((line) => {
+        const parts = line.split('\t');
+        return { name: parts[0], sha: parts[1], date: parts[2], subject: parts.slice(3).join('\t') };
+      })
+      .filter(r => !r.name.endsWith('/HEAD')); // skip symbolic refs like origin/HEAD
 
     // Compute ahead/behind relative to the stable trunk branch, not the current checkout.
     // This way "merged" means "merged into master/main", regardless of what's checked out.
@@ -46,26 +66,45 @@ export class GitService {
       || current
       || parsed[0]?.name;
 
-    const branches: BranchInfo[] = await Promise.all(
-      parsed.map(async (b) => {
-        if (!baseBranch || b.name === baseBranch) {
-          // Base branch itself — omit ahead/behind so it's never shown as "merged"
-          return { ...b };
-        }
-        try {
-          const counts = await this.git(
-            'rev-list', '--left-right', '--count',
-            `${baseBranch}...${b.name}`
-          );
-          const [behind, ahead] = counts.split('\t').map(Number);
-          return { ...b, ahead, behind };
-        } catch {
-          return { ...b, ahead: 0, behind: 0 };
-        }
-      })
-    );
+    const computeAheadBehind = async (refName: string): Promise<{ ahead: number; behind: number } | Record<string, never>> => {
+      if (!baseBranch || refName === baseBranch) return {};
+      try {
+        const counts = await this.git('rev-list', '--left-right', '--count', `${baseBranch}...${refName}`);
+        const [behind, ahead] = counts.split('\t').map(Number);
+        return { ahead, behind };
+      } catch {
+        return { ahead: 0, behind: 0 };
+      }
+    };
 
-    return { branches, current };
+    // Build a set of remote ref names for fast lookup
+    const remoteRefNames = new Set(remotes.map(r => r.name));
+
+    // For local branches with no configured upstream, check if a matching remote ref exists
+    // (e.g. origin/branch-name). This handles the case where the branch was pushed without -u.
+    const resolveLocalPushStatus = async (b: typeof parsed[0]): Promise<typeof parsed[0]> => {
+      if (b.upstream) return b; // already has a configured upstream
+      // Look for any remote ref matching <remote>/<branchname>
+      const matchingRemote = remotes.find(r => {
+        const slash = r.name.indexOf('/');
+        return slash !== -1 && r.name.slice(slash + 1) === b.name;
+      });
+      if (!matchingRemote) return b; // no remote branch found — truly unpushed
+      try {
+        const counts = await this.git('rev-list', '--left-right', '--count', `${matchingRemote.name}...${b.name}`);
+        const [localBehind, localAhead] = counts.split('\t').map(Number);
+        return { ...b, upstream: matchingRemote.name, localAhead, localBehind };
+      } catch {
+        return { ...b, upstream: matchingRemote.name, localAhead: 0, localBehind: 0 };
+      }
+    };
+
+    const [localBranches, remoteBranches] = await Promise.all([
+      Promise.all(parsed.map(async (b) => ({ ...await resolveLocalPushStatus(b), ...await computeAheadBehind(b.name) }))),
+      Promise.all(remotes.map(async (r) => ({ ...r, isRemote: true, ...await computeAheadBehind(r.name) }))),
+    ]);
+
+    return { branches: [...localBranches, ...remoteBranches], current };
   }
 
   async getCommits(options: {
@@ -202,6 +241,15 @@ export class GitService {
   }
 }
 
+function parseUpstreamTrack(track: string): { localAhead: number; localBehind: number } {
+  const aheadMatch = track.match(/ahead (\d+)/);
+  const behindMatch = track.match(/behind (\d+)/);
+  return {
+    localAhead: aheadMatch ? parseInt(aheadMatch[1], 10) : 0,
+    localBehind: behindMatch ? parseInt(behindMatch[1], 10) : 0,
+  };
+}
+
 function statusLabel(code: string): string {
   const map: Record<string, string> = {
     A: 'added',
@@ -219,8 +267,12 @@ export interface BranchInfo {
   sha: string;
   date: string;
   subject: string;
-  ahead?: number;  // undefined for the trunk branch itself
-  behind?: number; // undefined for the trunk branch itself
+  ahead?: number;      // commits ahead of trunk; undefined for the trunk branch itself
+  behind?: number;     // commits behind trunk; undefined for the trunk branch itself
+  upstream?: string;   // remote tracking ref, e.g. "origin/main"; undefined = no remote
+  localAhead?: number; // unpushed commits (local commits not on remote)
+  localBehind?: number;// commits on remote not yet fetched locally
+  isRemote?: boolean;  // true for refs/remotes/* entries
 }
 
 export interface CommitSummary {
