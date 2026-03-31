@@ -40,6 +40,9 @@
               [class.lane-status-ahead]="!s.isMerged"
               [attr.data-tooltip]="s.isMerged ? null : s.tooltip">
               {{ s.label }}
+              @if (s.localAhead > 0) {
+                <span class="badge-remote-ahead">▲{{ s.localAhead }}</span>
+              }
             </span>
           }
         </div>

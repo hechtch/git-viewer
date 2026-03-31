@@ -19,6 +19,7 @@ interface RefBadge {
 
 interface StatusBadge {
   label: string;
+  localAhead: number;  // unpushed commits to show in yellow; 0 = none
   width: number;
   isMerged: boolean;
   tooltip: string;
@@ -598,8 +599,9 @@ export class CommitGraphComponent implements OnChanges {
           if (info && info.ahead !== undefined) {
             const isMerged = info.ahead === 0;
             const label = isMerged ? 'merged' : `▲${info.ahead}${info.behind ? ' ▼' + info.behind : ''}`;
+            const localAhead = (!info.isRemote && !isMerged) ? (info.localAhead ?? 0) : 0;
             const tooltip = buildStatusTooltip(info);
-            this.laneStatus.set(node.col, { label, width: label.length * this.CHAR_WIDTH + this.BADGE_PAD, isMerged, tooltip });
+            this.laneStatus.set(node.col, { label, localAhead, width: label.length * this.CHAR_WIDTH + this.BADGE_PAD, isMerged, tooltip });
             break;
           }
         }

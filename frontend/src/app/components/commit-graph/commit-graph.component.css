@@ -215,3 +215,8 @@
   background: #313244;
   border-color: #a6e3a1;
 }
+
+.badge-remote-ahead {
+  color: #f9e2af;
+  margin-left: 3px;
+}
