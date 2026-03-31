@@ -39,9 +39,9 @@ import { GitApiService, BranchInfo } from '../../services/git-api.service';
               }
               @if ((b.ahead ?? 0) > 0) {
                 <span class="ahead-behind">
-                  <span class="ahead" [title]="'commits ahead of trunk'">▲{{ b.ahead }}</span>
+                  <span class="ahead" [title]="'commits ahead of ' + (b.base ?? 'trunk')">▲{{ b.ahead }}</span>
                   @if ((b.behind ?? 0) > 0) {
-                    <span class="behind" [title]="'commits behind trunk'">▼{{ b.behind }}</span>
+                    <span class="behind" [title]="'commits behind ' + (b.base ?? 'trunk')">▼{{ b.behind }}</span>
                   }
                 </span>
               }

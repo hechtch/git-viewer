@@ -38,12 +38,13 @@ export interface LaneLabel {
 }
 
 function buildStatusTooltip(info: BranchInfo): string {
-  if (info.ahead === 0) return 'Merged into trunk';
+  const base = info.base ?? 'trunk';
+  if (info.ahead === 0) return `Merged into ${base}`;
   const lines: string[] = [];
   const a = info.ahead ?? 0;
   const b = info.behind ?? 0;
-  lines.push(`${a} commit${a === 1 ? '' : 's'} ahead of trunk`);
-  if (b > 0) lines.push(`${b} commit${b === 1 ? '' : 's'} behind trunk`);
+  lines.push(`${a} commit${a === 1 ? '' : 's'} ahead of ${base}`);
+  if (b > 0) lines.push(`${b} commit${b === 1 ? '' : 's'} behind ${base}`);
   if (!info.isRemote) {
     if (!info.upstream) {
       lines.push('Not pushed to any remote');
