@@ -74,6 +74,12 @@ export class RepoSelectorComponent implements OnInit {
     this.repoOpened.emit('');
   }
 
+  removeRecent(repo: RecentRepo, event: MouseEvent): void {
+    event.stopPropagation();
+    this.recentRepos = this.recentRepos.filter(r => r.path !== repo.path);
+    this.api.removeRecentRepo(repo.path).subscribe();
+  }
+
   formatDate(iso: string): string {
     const d = new Date(iso);
     const now = new Date();

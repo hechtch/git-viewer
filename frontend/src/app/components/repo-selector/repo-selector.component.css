@@ -116,6 +116,21 @@ h2 { margin: 0; font-size: 18px; color: #cdd6f4; flex: 1; }
 
 .repo-date { font-size: 11px; color: #45475a; flex-shrink: 0; }
 
+.remove-btn {
+  display: none;
+  background: none;
+  border: none;
+  color: #6c7086;
+  font-size: 11px;
+  cursor: pointer;
+  padding: 2px 5px;
+  border-radius: 3px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.remove-btn:hover { color: #f38ba8; background: rgba(243,139,168,0.1); }
+.repo-item:hover .remove-btn { display: block; }
+
 .spinner {
   display: inline-block;
   width: 12px;

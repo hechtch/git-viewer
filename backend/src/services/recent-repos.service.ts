@@ -40,3 +40,7 @@ export function addRecentRepo(repoPath: string): void {
 export function getRecentRepos(): RecentRepo[] {
   return readRecentRepos();
 }
+
+export function removeRecentRepo(repoPath: string): void {
+  writeRecentRepos(readRecentRepos().filter(r => r.path !== repoPath));
+}

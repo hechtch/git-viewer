@@ -34,6 +34,7 @@
             @if (loadingPath === repo.path) {
               <span class="spinner"></span>
             }
+            <button class="remove-btn" title="Remove from list" (click)="removeRecent(repo, $event)">✕</button>
           </li>
         }
       </ul>

@@ -115,6 +115,10 @@ export class GitApiService {
     return this.http.get<RecentRepo[]>(`${this.base}/recent-repos`);
   }
 
+  removeRecentRepo(path: string): Observable<void> {
+    return this.http.delete<void>(`${this.base}/recent-repos`, { body: { path } });
+  }
+
   getBranches(): Observable<BranchesResponse> {
     return this.http.get<BranchesResponse>(`${this.base}/branches`);
   }

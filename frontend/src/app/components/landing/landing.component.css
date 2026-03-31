@@ -113,6 +113,21 @@ h2 {
   flex-shrink: 0;
 }
 
+.remove-btn {
+  display: none;
+  background: none;
+  border: none;
+  color: #6c7086;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.remove-btn:hover { color: #f38ba8; background: rgba(243,139,168,0.1); }
+.repo-item:hover .remove-btn { display: block; }
+
 .spinner {
   display: inline-block;
   width: 14px;
