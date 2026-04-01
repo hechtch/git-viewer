@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter, OnInit, inject } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
-import { GitApiService, RecentRepo } from '../../services/git-api.service';
+import { GitApiService, RecentRepo, BrowseResponse, BrowseEntry } from '../../services/git-api.service';
 
 @Component({
     selector: 'app-repo-selector',
@@ -18,9 +18,14 @@ export class RepoSelectorComponent implements OnInit {
 
   recentRepos: RecentRepo[] = [];
   loading = false;
-  picking = false;
   loadingPath: string | null = null;
   error = '';
+
+  // In-app folder browser state
+  browsing = false;
+  browseData: BrowseResponse | null = null;
+  browseLoading = false;
+  browseError = '';
 
   ngOnInit(): void {
     this.api.getRecentRepos().subscribe({
@@ -29,21 +34,41 @@ export class RepoSelectorComponent implements OnInit {
     });
   }
 
-  pickFolder(): void {
-    this.picking = true;
-    this.error = '';
-    this.api.pickFolder(this.initialPath || undefined).subscribe({
-      next: (result) => {
-        this.picking = false;
-        if (result?.path) {
-          this.openPath(result.path);
-        }
+  startBrowse(): void {
+    this.browsing = true;
+    this.browseError = '';
+    this.navigateTo(this.initialPath || undefined);
+  }
+
+  navigateTo(path?: string): void {
+    this.browseLoading = true;
+    this.browseError = '';
+    this.api.browse(path).subscribe({
+      next: (data) => {
+        this.browseData = data;
+        this.browseLoading = false;
       },
       error: () => {
-        this.picking = false;
-        this.error = 'Could not open folder picker (is the backend running?)';
+        this.browseError = 'Could not load directory';
+        this.browseLoading = false;
       }
     });
+  }
+
+  selectBrowseEntry(entry: BrowseEntry): void {
+    if (!this.browseData) return;
+    const fullPath = this.browseData.path.replace(/\/$/, '') + '/' + entry.name;
+    if (entry.isGitRepo) {
+      this.browsing = false;
+      this.openPath(fullPath);
+    } else {
+      this.navigateTo(fullPath);
+    }
+  }
+
+  cancelBrowse(): void {
+    this.browsing = false;
+    this.browseData = null;
   }
 
   openRecent(repo: RecentRepo): void {
