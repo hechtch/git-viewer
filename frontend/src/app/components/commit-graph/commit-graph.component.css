@@ -195,11 +195,8 @@
   position: relative;
 }
 
-.lane-status-badge[data-tooltip]:hover::after {
-  content: attr(data-tooltip);
-  position: absolute;
-  left: 0;
-  top: calc(100% + 5px);
+.status-tooltip {
+  position: fixed;
   background: #181825;
   color: #cdd6f4;
   padding: 7px 12px;
@@ -208,7 +205,7 @@
   font-size: 11px;
   font-family: monospace;
   white-space: pre;
-  z-index: 200;
+  z-index: 500;
   pointer-events: none;
   min-width: 220px;
   line-height: 1.6;

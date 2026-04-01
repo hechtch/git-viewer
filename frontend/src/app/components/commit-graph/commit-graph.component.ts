@@ -122,6 +122,16 @@ export class CommitGraphComponent implements OnChanges {
   }
 
   @HostBinding('class.resizing') private resizing = false;
+  statusTooltip: { text: string; x: number; y: number } | null = null;
+
+  showStatusTooltip(event: MouseEvent, text: string): void {
+    const r = (event.target as HTMLElement).getBoundingClientRect();
+    this.statusTooltip = { text, x: r.left, y: r.bottom + 6 };
+  }
+
+  hideStatusTooltip(): void {
+    this.statusTooltip = null;
+  }
   private resizeStartX = 0;
   private resizeStartWidth = 0;
 

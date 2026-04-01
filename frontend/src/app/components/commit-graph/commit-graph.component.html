@@ -39,7 +39,8 @@
               class="lane-status-badge"
               [class.lane-status-merged]="s.isMerged"
               [class.lane-status-ahead]="!s.isMerged"
-              [attr.data-tooltip]="s.isMerged ? null : s.tooltip">
+              (mouseenter)="s.isMerged ? null : showStatusTooltip($event, s.tooltip)"
+              (mouseleave)="hideStatusTooltip()">
               {{ s.label }}
               @if (s.localAhead > 0) {
                 <span class="badge-remote-ahead">▲{{ s.localAhead }}</span>
@@ -196,4 +197,12 @@
       }
     </svg>
   </div>
+
+  @if (statusTooltip) {
+    <div class="status-tooltip"
+         [style.left.px]="statusTooltip.x"
+         [style.top.px]="statusTooltip.y">
+      {{ statusTooltip.text }}
+    </div>
+  }
 </div>
