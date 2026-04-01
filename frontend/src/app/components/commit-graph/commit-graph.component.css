@@ -86,13 +86,6 @@
   background: rgba(69, 71, 90, 0.35);
 }
 
-.lane-label-row-hidden {
-  display: none;
-}
-
-.lane-merged-hidden {
-  display: none;
-}
 
 .lane-label-row-merged {
   opacity: 0.35;

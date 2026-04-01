@@ -93,6 +93,21 @@ export class CommitGraphComponent implements OnChanges {
   laneLabels: LaneLabel[] = [];
   laneStatus = new Map<number, StatusBadge>();
   mergedCols = new Set<number>();
+
+  get visibleNodes(): RenderNode[] {
+    if (this.showMerged) return this.renderNodes;
+    return this.renderNodes.filter(n => !this.mergedCols.has(n.col));
+  }
+
+  get visibleEdges(): RenderEdge[] {
+    if (this.showMerged) return this.allEdges;
+    return this.allEdges.filter(e => !e.merged);
+  }
+
+  get visibleLaneLabels(): LaneLabel[] {
+    if (this.showMerged) return this.laneLabels;
+    return this.laneLabels.filter(l => !l.merged && !this.mergedCols.has(l.col));
+  }
   selectedSha = '';
   selectedCol = -1;
   toastMessage = '';
@@ -102,6 +117,8 @@ export class CommitGraphComponent implements OnChanges {
   toastCy = 0;
 
   private childrenOf = new Map<string, string[]>();
+  private colRemap = new Map<number, number>();
+  private _visibleMaxCol = 0;
 
   svgWidth = 800;
   svgHeight = 200;
@@ -162,6 +179,7 @@ export class CommitGraphComponent implements OnChanges {
       }
       this.buildRenderNodes(nodes);
       this.buildLaneLabels(nodes);
+      this.buildColRemap();
       this.buildEdges();
       this.computeDimensions();
       this.buildChildrenMap();
@@ -230,7 +248,8 @@ export class CommitGraphComponent implements OnChanges {
 
   /** Position along the lane axis (branches). */
   private lanePos(col: number): number {
-    return col * this.LANE_HEIGHT + this.MARGIN;
+    const mapped = this.colRemap.get(col) ?? col;
+    return mapped * this.LANE_HEIGHT + this.MARGIN;
   }
 
   /** Node X: time axis in LR/RL, lane axis in TD/BU. */
@@ -719,28 +738,71 @@ export class CommitGraphComponent implements OnChanges {
 
   // ── Build helpers ─────────────────────────────────────────────────────────
 
+  private buildColRemap(): void {
+    this.colRemap.clear();
+    if (this.showMerged) {
+      // Identity mapping — no compaction needed
+      this._visibleMaxCol = this._maxCol;
+      return;
+    }
+    // Collect all used columns that are NOT merged
+    const visibleCols = new Set<number>();
+    for (const node of this.renderNodes) {
+      if (!this.mergedCols.has(node.col)) visibleCols.add(node.col);
+    }
+    const sorted = [...visibleCols].sort((a, b) => a - b);
+    let idx = 0;
+    for (const col of sorted) {
+      this.colRemap.set(col, idx++);
+    }
+    this._visibleMaxCol = Math.max(0, idx - 1);
+  }
+
   private buildLaneLabels(nodes: LayoutNode[]): void {
-    const mergedSet = new Set(
-      this.branches.filter(b => (b.ahead ?? -1) === 0).map(b => b.name)
+    // Active branches: ahead > 0 or is the current branch
+    const activeSet = new Set(
+      this.branches
+        .filter(b => (b.ahead ?? -1) > 0 || b.name === this.currentBranch)
+        .map(b => b.name)
     );
+
     const labelMap = new Map<number, LaneLabel>();
     for (const node of nodes) {
       if (labelMap.has(node.col)) continue;
       if (node.entry.refs.length > 0) {
         const name = node.entry.refs[0].replace('HEAD -> ', '');
+        // A lane is active if ANY of its refs match an active branch
+        const isActive = node.entry.refs.some(r =>
+          activeSet.has(r.replace('HEAD -> ', ''))
+        );
         labelMap.set(node.col, {
           name, col: node.col, color: node.color,
-          merged: mergedSet.has(name),
+          merged: !isActive,
           isCurrent: name === this.currentBranch,
         });
       }
     }
     for (const node of nodes) {
       if (!labelMap.has(node.col)) {
-        labelMap.set(node.col, { name: `lane ${node.col}`, col: node.col, color: node.color });
+        // Check if any ref on any node in this column is active
+        const colNodes = nodes.filter(n => n.col === node.col);
+        const isActive = colNodes.some(n =>
+          n.entry.refs.some(r => activeSet.has(r.replace('HEAD -> ', '')))
+        );
+        labelMap.set(node.col, {
+          name: `lane ${node.col}`, col: node.col, color: node.color,
+          merged: !isActive,
+        });
       }
     }
     this.laneLabels = [...labelMap.values()].sort((a, b) => a.col - b.col);
+
+    // Rebuild mergedCols from lane labels for consistency
+    this.mergedCols.clear();
+    for (const lane of this.laneLabels) {
+      if (lane.merged) this.mergedCols.add(lane.col);
+    }
+
     this.labelsWidth = this.computeLabelsWidth();
   }
 
@@ -800,18 +862,13 @@ export class CommitGraphComponent implements OnChanges {
 
       return { ...node, badges };
     });
-
-    this.mergedCols.clear();
-    for (const [col, status] of this.laneStatus) {
-      if (status.isMerged) this.mergedCols.add(col);
-    }
   }
 
   private buildEdges(): void {
     this.allEdges = [];
     for (const node of this.renderNodes) {
       for (const edge of node.edges) {
-        const merged = this.mergedCols.has(node.col) && this.mergedCols.has(edge.toCol);
+        const merged = this.mergedCols.has(node.col) || this.mergedCols.has(edge.toCol);
         this.allEdges.push({ path: this.edgePath(node.row, edge), color: edge.color, merged });
       }
     }
@@ -835,11 +892,12 @@ export class CommitGraphComponent implements OnChanges {
   }
 
   private computeDimensions(): void {
+    const cols = this._visibleMaxCol + 1;
     if (this.isHorizontal) {
       this.svgWidth = this.entries.length * this.COMMIT_SPACING + this.MARGIN * 2;
-      this.svgHeight = (this._maxCol + 1) * this.LANE_HEIGHT + this.MARGIN * 2;
+      this.svgHeight = cols * this.LANE_HEIGHT + this.MARGIN * 2;
     } else {
-      this.svgWidth = (this._maxCol + 1) * this.LANE_HEIGHT + this.MARGIN * 2;
+      this.svgWidth = cols * this.LANE_HEIGHT + this.MARGIN * 2;
       this.svgHeight = this.entries.length * this.COMMIT_SPACING + this.MARGIN * 2;
     }
   }
