@@ -30,7 +30,7 @@
         </div>
         @if (activeTab === 'timeline') {
           <div class="tab-content">
-            <div class="commit-log-panel">
+            <div class="commit-log-panel" [style.height.px]="logPanelHeight">
               <app-commit-log
                 [branch]="null"
                 [repoPath]="repoPath"
@@ -38,6 +38,7 @@
                 (commitSelected)="onCommitSelected($event)">
               </app-commit-log>
             </div>
+            <div class="h-resizer" (mousedown)="startResizeLog($event)"></div>
             <div class="commit-detail-panel">
               <app-commit-detail [sha]="selectedCommit"></app-commit-detail>
             </div>
@@ -45,7 +46,7 @@
         }
         @if (activeTab === 'commits') {
           <div class="tab-content">
-            <div class="commit-log-panel">
+            <div class="commit-log-panel" [style.height.px]="logPanelHeight">
               <app-commit-log
                 [branch]="null"
                 [repoPath]="repoPath"
@@ -53,6 +54,7 @@
                 (commitSelected)="onCommitSelected($event)">
               </app-commit-log>
             </div>
+            <div class="h-resizer" (mousedown)="startResizeLog($event)"></div>
             <div class="commit-detail-panel">
               <app-commit-detail [sha]="selectedCommit"></app-commit-detail>
             </div>

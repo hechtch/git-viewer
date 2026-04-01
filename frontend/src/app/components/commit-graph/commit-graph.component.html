@@ -15,7 +15,7 @@
 
   <!-- LR mode: pinned lane labels on the left -->
   @if (isHorizontal) {
-    <div class="lane-labels" [style.height.px]="svgHeight * zoom">
+    <div class="lane-labels" [style.width.px]="labelsWidth" [style.height.px]="svgHeight * zoom">
       @for (lane of laneLabels; track lane) {
         <div
           class="lane-label-row"
@@ -49,6 +49,7 @@
         </div>
       }
     </div>
+    <div class="lane-labels-resizer" (mousedown)="startResize($event)"></div>
   }
 
   <!-- Horizontally scrollable graph -->

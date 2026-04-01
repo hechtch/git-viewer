@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, HostListener, ViewChild, ElementRef, inject } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, HostListener, HostBinding, ViewChild, ElementRef, inject } from '@angular/core';
 
 import { BranchInfo, GraphEntry } from '../../services/git-api.service';
 import { computeLayout, LayoutNode, LayoutEdge } from './graph-layout';
@@ -108,6 +108,8 @@ export class CommitGraphComponent implements OnChanges {
   readonly MAX_ZOOM = 2.0;
   readonly ZOOM_STEP = 0.15;
 
+  labelsWidth = 120;
+
   private _maxCol = 0;
   private toastTimer: ReturnType<typeof setTimeout> | null = null;
   private mouseInactivityTimer: ReturnType<typeof setTimeout> | null = null;
@@ -117,6 +119,28 @@ export class CommitGraphComponent implements OnChanges {
 
   get showMouseHover(): boolean {
     return this.mouseActive && !this.usingKeyboard;
+  }
+
+  @HostBinding('class.resizing') private resizing = false;
+  private resizeStartX = 0;
+  private resizeStartWidth = 0;
+
+  startResize(event: MouseEvent): void {
+    event.preventDefault();
+    this.resizing = true;
+    this.resizeStartX = event.clientX;
+    this.resizeStartWidth = this.labelsWidth;
+  }
+
+  @HostListener('document:mousemove', ['$event'])
+  onResizeMove(e: MouseEvent): void {
+    if (!this.resizing) return;
+    this.labelsWidth = Math.max(80, this.resizeStartWidth + e.clientX - this.resizeStartX);
+  }
+
+  @HostListener('document:mouseup')
+  onResizeEnd(): void {
+    this.resizing = false;
   }
 
   onMouseMove(): void {
@@ -578,6 +602,22 @@ export class CommitGraphComponent implements OnChanges {
       }
     }
     this.laneLabels = [...labelMap.values()].sort((a, b) => a.col - b.col);
+    this.labelsWidth = this.computeLabelsWidth();
+  }
+
+  private computeLabelsWidth(): number {
+    const HEAD_BADGE_W = 34; // "HEAD" at 10px monospace + padding
+    const GAP = 8;
+    const PAD = 16; // left + right padding
+    let max = 0;
+    for (const lane of this.laneLabels) {
+      let w = lane.name.length * this.CHAR_WIDTH + PAD;
+      if (lane.isCurrent) w += GAP + HEAD_BADGE_W;
+      const status = this.laneStatus.get(lane.col);
+      if (status) w += GAP + status.width;
+      if (w > max) max = w;
+    }
+    return Math.max(120, max);
   }
 
   private buildRenderNodes(nodes: LayoutNode[]): void {

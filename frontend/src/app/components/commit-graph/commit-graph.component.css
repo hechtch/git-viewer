@@ -53,11 +53,20 @@
 
 .lane-labels {
   flex-shrink: 0;
-  width: 250px;
   position: relative;
-  border-right: 1px solid #313244;
-  overflow: visible;
+  overflow: hidden;
 }
+
+.lane-labels-resizer {
+  flex-shrink: 0;
+  width: 5px;
+  cursor: col-resize;
+  background: #313244;
+  transition: background 0.1s;
+  align-self: stretch;
+}
+.lane-labels-resizer:hover, :host.resizing .lane-labels-resizer { background: #89b4fa; }
+:host.resizing { cursor: col-resize; user-select: none; }
 
 .lane-label-row {
   position: absolute;

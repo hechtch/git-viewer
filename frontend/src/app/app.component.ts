@@ -46,6 +46,7 @@ export class AppComponent implements OnInit {
   selectedCommit: string | null = null;
   activeTab: 'timeline' | 'commits' | 'files' = 'timeline';
   refreshTick = 0;
+  logPanelHeight = Math.round(window.innerHeight * 0.45);
 
   ngOnInit(): void {
     this.api.getRepo().subscribe({
@@ -73,6 +74,21 @@ export class AppComponent implements OnInit {
 
   onRefreshed(): void {
     this.refreshTick++;
+  }
+
+  startResizeLog(event: MouseEvent): void {
+    event.preventDefault();
+    const startY = event.clientY;
+    const startH = this.logPanelHeight;
+    const onMove = (e: MouseEvent) => {
+      this.logPanelHeight = Math.max(80, startH + e.clientY - startY);
+    };
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
   }
 
   onCommitSelected(sha: string): void {
