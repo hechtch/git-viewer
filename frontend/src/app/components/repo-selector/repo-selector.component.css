@@ -95,7 +95,7 @@ h2 { margin: 0; font-size: 18px; color: #cdd6f4; flex: 1; }
 .repo-item.loading { background: #313244; }
 .repo-item.disabled { opacity: 0.45; cursor: default; }
 
-.repo-icon { font-size: 16px; flex-shrink: 0; }
+.repo-icon { font-size: 16px; flex-shrink: 0; width: 16px; height: 16px; object-fit: contain; }
 
 .repo-info {
   flex: 1;
@@ -242,6 +242,7 @@ h2 { margin: 0; font-size: 18px; color: #cdd6f4; flex: 1; }
 .browse-item.is-repo { border-color: #45475a; }
 .browse-item.is-repo:hover { border-color: #89b4fa; }
 .browse-icon { font-size: 15px; flex-shrink: 0; }
+.git-icon { width: 15px; height: 15px; object-fit: contain; }
 .browse-name { flex: 1; font-size: 13px; color: #cdd6f4; }
 .repo-badge {
   font-size: 10px;

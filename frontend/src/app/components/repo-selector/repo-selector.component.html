@@ -30,7 +30,11 @@
           <ul class="browse-list">
             @for (entry of browseData.entries; track entry.name) {
               <li class="browse-item" [class.is-repo]="entry.isGitRepo" (click)="selectBrowseEntry(entry)">
-                <span class="browse-icon">{{ entry.isGitRepo ? '📁' : '📂' }}</span>
+                @if (entry.isGitRepo) {
+                  <img class="browse-icon git-icon" src="/favicon-dark.png" alt="git repo" />
+                } @else {
+                  <span class="browse-icon">📂</span>
+                }
                 <span class="browse-name">{{ entry.name }}</span>
                 @if (entry.isGitRepo) {
                   <span class="repo-badge">git</span>
@@ -59,7 +63,7 @@
               [class.loading]="loadingPath === repo.path"
               [class.disabled]="(loadingPath !== null || loading) && loadingPath !== repo.path"
               (click)="openRecent(repo)">
-              <span class="repo-icon">📁</span>
+              <img class="repo-icon git-icon" src="/favicon-dark.png" alt="git repo" />
               <div class="repo-info">
                 <span class="repo-name">{{ repo.name }}</span>
                 <span class="repo-path">{{ repo.path }}</span>
