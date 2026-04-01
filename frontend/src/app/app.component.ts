@@ -3,7 +3,6 @@ import { GitApiService } from './services/git-api.service';
 import { LandingComponent } from './components/landing/landing.component';
 import { RepoSelectorComponent } from './components/repo-selector/repo-selector.component';
 import { RepoStatusComponent } from './components/repo-status/repo-status.component';
-import { BranchListComponent } from './components/branch-list/branch-list.component';
 import { CommitLogComponent } from './components/commit-log/commit-log.component';
 import { CommitDetailComponent } from './components/commit-detail/commit-detail.component';
 import { FileTreeComponent } from './components/file-tree/file-tree.component';
@@ -17,7 +16,6 @@ import { FileTreeComponent } from './components/file-tree/file-tree.component';
         LandingComponent,
         RepoSelectorComponent,
         RepoStatusComponent,
-        BranchListComponent,
         CommitLogComponent,
         CommitDetailComponent,
         FileTreeComponent,
@@ -45,7 +43,6 @@ export class AppComponent implements OnInit {
     }
   }
 
-  selectedBranch: string | null = null;
   selectedCommit: string | null = null;
   activeTab: 'timeline' | 'commits' | 'files' = 'timeline';
   refreshTick = 0;
@@ -65,7 +62,6 @@ export class AppComponent implements OnInit {
   onRepoOpened(path: string): void {
     if (path) {
       this.repoPath = path;
-      this.selectedBranch = null;
       this.selectedCommit = null;
     }
     this.showSelector = false;
@@ -77,14 +73,6 @@ export class AppComponent implements OnInit {
 
   onRefreshed(): void {
     this.refreshTick++;
-  }
-
-  onBranchSelected(branch: string | null): void {
-    this.selectedBranch = branch;
-    this.selectedCommit = null;
-    if (this.activeTab !== 'commits') {
-      this.activeTab = 'timeline';
-    }
   }
 
   onCommitSelected(sha: string): void {

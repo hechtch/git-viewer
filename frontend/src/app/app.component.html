@@ -22,9 +22,6 @@
     </div>
     <app-repo-status (refreshed)="onRefreshed()"></app-repo-status>
     <div class="main-layout">
-      <aside class="sidebar">
-        <app-branch-list [repoPath]="repoPath" [refreshTick]="refreshTick" (branchSelected)="onBranchSelected($event)"></app-branch-list>
-      </aside>
       <main class="content" [style.--text-zoom]="contentZoom">
         <div class="tab-bar">
           <button [class.active]="activeTab === 'timeline'" (click)="activeTab = 'timeline'">Timeline</button>
@@ -38,7 +35,6 @@
                 [branch]="null"
                 [repoPath]="repoPath"
                 [refreshTick]="refreshTick"
-                [jumpToBranch]="selectedBranch"
                 (commitSelected)="onCommitSelected($event)">
               </app-commit-log>
             </div>
@@ -51,7 +47,7 @@
           <div class="tab-content">
             <div class="commit-log-panel">
               <app-commit-log
-                [branch]="selectedBranch"
+                [branch]="null"
                 [repoPath]="repoPath"
                 [refreshTick]="refreshTick"
                 (commitSelected)="onCommitSelected($event)">
@@ -64,7 +60,7 @@
         }
         @if (activeTab === 'files') {
           <div class="tab-content">
-            <app-file-tree [ref]="selectedBranch || 'HEAD'"></app-file-tree>
+            <app-file-tree [ref]="'HEAD'"></app-file-tree>
           </div>
         }
       </main>

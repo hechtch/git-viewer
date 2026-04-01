@@ -53,7 +53,7 @@
 
 .lane-labels {
   flex-shrink: 0;
-  width: 200px;
+  width: 250px;
   position: relative;
   border-right: 1px solid #313244;
   overflow: visible;

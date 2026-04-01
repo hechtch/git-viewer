@@ -48,13 +48,6 @@
   overflow: hidden;
 }
 
-.sidebar {
-  width: 220px;
-  border-right: 1px solid #313244;
-  overflow-y: auto;
-  flex-shrink: 0;
-}
-
 .content {
   flex: 1;
   overflow-y: auto;
