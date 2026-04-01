@@ -1,8 +1,16 @@
-import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, HostListener, HostBinding, ViewChild, ElementRef, inject, ChangeDetectorRef } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnChanges, OnInit, OnDestroy, SimpleChanges, HostListener, HostBinding, ViewChild, ElementRef, inject, ChangeDetectorRef } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
+import { Subscription } from 'rxjs';
 
 import { BranchInfo, GraphEntry } from '../../services/git-api.service';
 import { computeLayout, LayoutNode, LayoutEdge } from './graph-layout';
+import { SettingsService } from '../../services/settings.service';
+
+interface TimeWatermark {
+  label: string;
+  labelPos: number;   // SVG coordinate along the time axis for the period label
+  rulePos?: number;   // SVG coordinate for the separator line (absent on the newest period)
+}
 
 interface RenderEdge {
   path: string;
@@ -68,7 +76,7 @@ function buildStatusTooltip(info: BranchInfo): string {
     templateUrl: './commit-graph.component.html',
     styleUrls: ['./commit-graph.component.css']
 })
-export class CommitGraphComponent implements OnChanges {
+export class CommitGraphComponent implements OnChanges, OnInit, OnDestroy {
   @Input() entries: GraphEntry[] = [];
   @Input() branches: BranchInfo[] = [];
   @Input() currentBranch = '';
@@ -89,12 +97,15 @@ export class CommitGraphComponent implements OnChanges {
   @ViewChild('laneLabelsEl') laneLabelsRef: ElementRef<HTMLElement> | undefined;
   private hostEl = inject(ElementRef<HTMLElement>);
   private cdr = inject(ChangeDetectorRef);
+  protected settings = inject(SettingsService);
+  private settingsSub?: Subscription;
 
   renderNodes: RenderNode[] = [];
   allEdges: RenderEdge[] = [];
   laneLabels: LaneLabel[] = [];
   laneStatus = new Map<number, StatusBadge>();
   mergedCols = new Set<number>();
+  timeWatermarks: TimeWatermark[] = [];
 
   get visibleNodes(): RenderNode[] {
     if (this.showMerged) return this.renderNodes;
@@ -172,6 +183,14 @@ export class CommitGraphComponent implements OnChanges {
     this.mouseInactivityTimer = setTimeout(() => { this.mouseActive = false; }, 2000);
   }
 
+  ngOnInit(): void {
+    this.settingsSub = this.settings.change$.subscribe(() => this.updateVisibleWatermarks());
+  }
+
+  ngOnDestroy(): void {
+    this.settingsSub?.unsubscribe();
+  }
+
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['entries'] || changes['branches'] || changes['currentBranch'] || changes['showMerged'] || changes['viewMode']) {
       const nodes = computeLayout(this.entries);
@@ -185,6 +204,7 @@ export class CommitGraphComponent implements OnChanges {
       this.buildEdges();
       this.computeDimensions();
       this.buildChildrenMap();
+      setTimeout(() => this.updateVisibleWatermarks());
       if (changes['entries']) {
         if (!this.selectedSha && this.renderNodes.length) {
           this.selectNode(this.renderNodes[0]);
@@ -489,6 +509,7 @@ export class CommitGraphComponent implements OnChanges {
     const el = this.graphScrollRef?.nativeElement;
     if (el) {
       this.laneLabelsOffset = -el.scrollTop;
+      this.updateVisibleWatermarks();
     }
   }
 
@@ -567,6 +588,7 @@ export class CommitGraphComponent implements OnChanges {
         top: Math.max(0, centerY - viewportH / 2),
         behavior: 'instant',
       });
+      this.updateVisibleWatermarks();
     });
   }
 
@@ -574,7 +596,9 @@ export class CommitGraphComponent implements OnChanges {
     this.zoom = Math.min(this.MAX_ZOOM, Math.max(this.MIN_ZOOM, +(this.zoom + delta).toFixed(2)));
     const selected = this.renderNodes.find(n => n.entry.sha === this.selectedSha);
     if (selected) {
-      setTimeout(() => this.scrollToNode(selected, 'instant'));
+      setTimeout(() => { this.scrollToNode(selected, 'instant'); this.updateVisibleWatermarks(); });
+    } else {
+      setTimeout(() => this.updateVisibleWatermarks());
     }
   }
 
@@ -824,6 +848,104 @@ export class CommitGraphComponent implements OnChanges {
       const midY = (y1 + y2) / 2;
       return `M ${x1} ${y1} C ${x1} ${midY}, ${x2} ${midY}, ${x2} ${y2}`;
     }
+  }
+
+  get watermarkFontSize(): number {
+    const cross = this.isHorizontal ? this.svgHeight : this.svgWidth;
+    return cross * 0.38 * this.settings.watermark.fontScale;
+  }
+
+  private labelFor(d: Date, granularity: 'hour' | 'day' | 'date' | 'month' | 'year'): string {
+    const fmt = this.settings.watermark.dateFormat;
+    switch (granularity) {
+      case 'hour':
+        if (fmt === 'short') {
+          const h = d.getHours() % 12 || 12;
+          return `${h}${d.getHours() >= 12 ? 'pm' : 'am'}`;
+        }
+        if (fmt === 'long') return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+        return d.toLocaleTimeString('en-US', { hour: 'numeric', hour12: true });
+      case 'day':
+        return d.toLocaleDateString('en-US', { weekday: fmt === 'long' ? 'long' : 'short' });
+      case 'date':
+        if (fmt === 'long') return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        return d.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' });
+      case 'month':
+        if (fmt === 'short') return d.toLocaleDateString('en-US', { month: 'short' }) + ' \'' + String(d.getFullYear()).slice(2);
+        if (fmt === 'long') return d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+        return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+      case 'year':
+        return String(d.getFullYear());
+    }
+  }
+
+  updateVisibleWatermarks(): void {
+    if (!this.settings.watermark.enabled) { this.timeWatermarks = []; return; }
+    const el = this.graphScrollRef?.nativeElement;
+    if (!el || !this.entries.length) { this.timeWatermarks = []; return; }
+
+    // Visible SVG coordinate range along the time axis
+    const minPos = (this.isHorizontal ? el.scrollLeft : el.scrollTop) / this.zoom;
+    const span = (this.isHorizontal ? el.clientWidth : el.clientHeight) / this.zoom;
+    const maxPos = minPos + span;
+
+    // Collect visible rows with valid dates
+    const rowDates: { row: number; date: Date }[] = [];
+    for (let row = 0; row < this.entries.length; row++) {
+      const pos = this.timePos(row);
+      if (pos >= minPos - this.COMMIT_SPACING && pos <= maxPos + this.COMMIT_SPACING) {
+        const d = new Date(this.entries[row].date);
+        if (!isNaN(d.getTime())) rowDates.push({ row, date: d });
+      }
+    }
+    if (rowDates.length < 2) { this.timeWatermarks = []; return; }
+
+    const times = rowDates.map(rd => rd.date.getTime());
+    const rangeDays = (Math.max(...times) - Math.min(...times)) / 86_400_000;
+
+    let periodKey: (d: Date) => string;
+    let fmtLabel: (d: Date) => string;
+
+    if (rangeDays < 1) {
+      periodKey = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}-${d.getHours()}`;
+      fmtLabel = (d: Date) => this.labelFor(d, 'hour');
+    } else if (rangeDays < 7) {
+      periodKey = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+      fmtLabel = (d: Date) => this.labelFor(d, 'day');
+    } else if (rangeDays < 90) {
+      periodKey = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+      fmtLabel = (d: Date) => this.labelFor(d, 'date');
+    } else if (rangeDays < 730) {
+      periodKey = (d: Date) => `${d.getFullYear()}-${d.getMonth()}`;
+      fmtLabel = (d: Date) => this.labelFor(d, 'month');
+    } else {
+      periodKey = (d: Date) => `${d.getFullYear()}`;
+      fmtLabel = (d: Date) => this.labelFor(d, 'year');
+    }
+
+    // Group visible rows by period — use a Map to handle topo-order non-monotonic dates
+    const groups = new Map<string, { label: string; positions: number[] }>();
+    for (const { row, date } of rowDates) {
+      const key = periodKey(date);
+      if (!groups.has(key)) groups.set(key, { label: fmtLabel(date), positions: [] });
+      groups.get(key)!.positions.push(this.timePos(row));
+    }
+
+    // Sort periods by their average position along the time axis, skipping sparse ones
+    const sorted = [...groups.values()].filter(g => g.positions.length >= this.settings.watermark.minCommits)
+      .map(g => ({
+        label: g.label,
+        avgPos: g.positions.reduce((s, p) => s + p, 0) / g.positions.length,
+        minPos: Math.min(...g.positions),
+        maxPos: Math.max(...g.positions),
+      }))
+      .sort((a, b) => a.avgPos - b.avgPos);
+
+    this.timeWatermarks = sorted.map((g, i) => ({
+      label: g.label,
+      labelPos: g.avgPos,
+      rulePos: i > 0 ? (sorted[i - 1].maxPos + g.minPos) / 2 : undefined,
+    }));
   }
 
   private computeDimensions(): void {

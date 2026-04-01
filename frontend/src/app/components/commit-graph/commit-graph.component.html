@@ -60,6 +60,46 @@
       [attr.viewBox]="'0 0 ' + svgWidth + ' ' + svgHeight"
       class="graph-svg">
 
+      <!-- Time period watermarks -->
+      <g class="time-watermarks" pointer-events="none">
+        @for (wm of timeWatermarks; track wm.label) {
+          @if (wm.rulePos !== undefined) {
+            @if (isHorizontal) {
+              <line
+                [attr.x1]="wm.rulePos" y1="0"
+                [attr.x2]="wm.rulePos" [attr.y2]="svgHeight"
+                [attr.opacity]="settings.watermark.ruleOpacity"
+                class="time-watermark-rule"/>
+            } @else {
+              <line
+                x1="0" [attr.y1]="wm.rulePos"
+                [attr.x2]="svgWidth" [attr.y2]="wm.rulePos"
+                [attr.opacity]="settings.watermark.ruleOpacity"
+                class="time-watermark-rule"/>
+            }
+          }
+          @if (isHorizontal) {
+            <text
+              [attr.x]="wm.labelPos"
+              [attr.y]="svgHeight / 2"
+              [attr.font-size]="watermarkFontSize"
+              [attr.opacity]="settings.watermark.textOpacity"
+              class="time-watermark-text"
+              text-anchor="middle"
+              dominant-baseline="middle">{{ wm.label }}</text>
+          } @else {
+            <text
+              [attr.x]="svgWidth / 2"
+              [attr.y]="wm.labelPos"
+              [attr.font-size]="watermarkFontSize"
+              [attr.opacity]="settings.watermark.textOpacity"
+              class="time-watermark-text"
+              text-anchor="middle"
+              dominant-baseline="middle">{{ wm.label }}</text>
+          }
+        }
+      </g>
+
       <!-- Lane background rows (LR) or columns (TD) -->
       <g class="lane-rows">
         @for (lane of visibleLaneLabels; track lane) {
