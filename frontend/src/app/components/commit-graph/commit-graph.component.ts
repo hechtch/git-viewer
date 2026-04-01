@@ -8,6 +8,7 @@ interface RenderEdge {
   path: string;
   color: string;
   merged: boolean;
+  bridging: boolean;
 }
 
 interface RefBadge {
@@ -101,7 +102,7 @@ export class CommitGraphComponent implements OnChanges {
 
   get visibleEdges(): RenderEdge[] {
     if (this.showMerged) return this.allEdges;
-    return this.allEdges.filter(e => !e.merged);
+    return this.allEdges.filter(e => !e.merged);  // keeps bridging edges
   }
 
   get visibleLaneLabels(): LaneLabel[] {
@@ -865,11 +866,45 @@ export class CommitGraphComponent implements OnChanges {
   }
 
   private buildEdges(): void {
+    // Find merged columns that connect to active columns (directly or transitively)
+    const connectedMergedCols = new Set<number>();
+    // Seed: merged cols with a direct edge to/from an active col
+    for (const node of this.renderNodes) {
+      for (const edge of node.edges) {
+        const fromMerged = this.mergedCols.has(node.col);
+        const toMerged = this.mergedCols.has(edge.toCol);
+        if (fromMerged && !toMerged) connectedMergedCols.add(node.col);
+        if (toMerged && !fromMerged) connectedMergedCols.add(edge.toCol);
+      }
+    }
+    // Propagate: merged cols connected to other connected merged cols
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (const node of this.renderNodes) {
+        for (const edge of node.edges) {
+          if (this.mergedCols.has(node.col) && this.mergedCols.has(edge.toCol)) {
+            if (connectedMergedCols.has(node.col) && !connectedMergedCols.has(edge.toCol)) {
+              connectedMergedCols.add(edge.toCol); changed = true;
+            }
+            if (connectedMergedCols.has(edge.toCol) && !connectedMergedCols.has(node.col)) {
+              connectedMergedCols.add(node.col); changed = true;
+            }
+          }
+        }
+      }
+    }
+
     this.allEdges = [];
     for (const node of this.renderNodes) {
       for (const edge of node.edges) {
-        const merged = this.mergedCols.has(node.col) || this.mergedCols.has(edge.toCol);
-        this.allEdges.push({ path: this.edgePath(node.row, edge), color: edge.color, merged });
+        const fromMerged = this.mergedCols.has(node.col);
+        const toMerged = this.mergedCols.has(edge.toCol);
+        const fullyMerged = fromMerged && toMerged;
+        const connected = connectedMergedCols.has(node.col) || connectedMergedCols.has(edge.toCol);
+        const merged = fullyMerged && !connected;
+        const bridging = (fromMerged !== toMerged) || (fullyMerged && connected);
+        this.allEdges.push({ path: this.edgePath(node.row, edge), color: edge.color, merged, bridging });
       }
     }
   }

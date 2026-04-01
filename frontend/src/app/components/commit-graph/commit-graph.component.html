@@ -110,7 +110,7 @@
       <g class="edges">
         @for (edge of visibleEdges; track edge) {
           <path [attr.d]="edge.path" [attr.stroke]="edge.color" stroke-width="2" fill="none"
-                [class.merged-dim]="edge.merged"/>
+                [class.merged-dim]="edge.merged || (!showMerged && edge.bridging)"/>
         }
       </g>
 
