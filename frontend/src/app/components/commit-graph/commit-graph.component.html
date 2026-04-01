@@ -23,7 +23,8 @@
           [class.lane-label-row-hidden]="!showMerged && lane.merged"
           [class.lane-label-row-merged]="showMerged && lane.merged"
           [style.top.px]="(lanePrimaryPos(lane.col) - LANE_HEIGHT / 2) * zoom"
-          [style.height.px]="LANE_HEIGHT * zoom">
+          [style.height.px]="LANE_HEIGHT * zoom"
+          (click)="jumpToNamedBranch(lane.name)">
           <span
             class="lane-label"
             [class.lane-label-selected]="lane.col === selectedCol"

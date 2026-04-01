@@ -165,12 +165,12 @@ export class CommitGraphComponent implements OnChanges {
         this.showToast(label, true);
       });
     }
-    if (this.jumpToBranch) {
-      this.jumpToNamedBranch(this.jumpToBranch);
+    if (changes['jumpToBranch'] && this.jumpToBranch) {
+      setTimeout(() => this.jumpToNamedBranch(this.jumpToBranch!));
     }
   }
 
-  private jumpToNamedBranch(name: string): void {
+  jumpToNamedBranch(name: string): void {
     const node = this.renderNodes.find(n =>
       n.entry.refs.some(r => r.replace('HEAD -> ', '') === name)
     );
