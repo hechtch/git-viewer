@@ -1,4 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, HostListener, HostBinding, ViewChild, ElementRef, inject } from '@angular/core';
+import { DecimalPipe } from '@angular/common';
 
 import { BranchInfo, GraphEntry } from '../../services/git-api.service';
 import { computeLayout, LayoutNode, LayoutEdge } from './graph-layout';
@@ -62,7 +63,7 @@ function buildStatusTooltip(info: BranchInfo): string {
 
 @Component({
     selector: 'app-commit-graph',
-    imports: [],
+    imports: [DecimalPipe],
     templateUrl: './commit-graph.component.html',
     styleUrls: ['./commit-graph.component.css']
 })
@@ -142,16 +143,6 @@ export class CommitGraphComponent implements OnChanges {
     this.resizeStartWidth = this.labelsWidth;
   }
 
-  @HostListener('document:mousemove', ['$event'])
-  onResizeMove(e: MouseEvent): void {
-    if (!this.resizing) return;
-    this.labelsWidth = Math.max(80, this.resizeStartWidth + e.clientX - this.resizeStartX);
-  }
-
-  @HostListener('document:mouseup')
-  onResizeEnd(): void {
-    this.resizing = false;
-  }
 
   onMouseMove(): void {
     if (this.usingKeyboard) this.usingKeyboard = false;
@@ -457,11 +448,152 @@ export class CommitGraphComponent implements OnChanges {
     this.commitSelected.emit(node.entry.sha);
   }
 
-  onWheel(event: WheelEvent): void {
-    if (event.ctrlKey || event.metaKey) {
-      event.preventDefault();
-      this.adjustZoom(event.deltaY < 0 ? this.ZOOM_STEP : -this.ZOOM_STEP);
+  // ── Ctrl+drag box zoom ────────────────────────────────────────────────────
+
+  zoomBox: { x: number; y: number; w: number; h: number } | null = null;
+  private dragStart: { clientX: number; clientY: number } | null = null;
+
+  onGraphMouseDown(event: MouseEvent): void {
+    if (!(event.ctrlKey || event.metaKey)) return;
+    event.preventDefault();
+    this.dragStart = { clientX: event.clientX, clientY: event.clientY };
+    this.zoomBox = null;
+  }
+
+  @HostListener('document:mousemove', ['$event'])
+  onDragMove(e: MouseEvent): void {
+    if (this.resizing) {
+      this.labelsWidth = Math.max(80, this.resizeStartWidth + e.clientX - this.resizeStartX);
+      return;
     }
+    if (!this.dragStart) return;
+
+    const el = this.graphScrollRef?.nativeElement;
+    if (!el) return;
+
+    const svgRect = el.querySelector('svg')?.getBoundingClientRect();
+    if (!svgRect) return;
+
+    // Convert client coords to SVG viewBox coords
+    const toSvg = (clientX: number, clientY: number) => ({
+      x: (clientX - svgRect.left + el.scrollLeft) / this.zoom,
+      y: (clientY - svgRect.top) / this.zoom,
+    });
+
+    // Also account for vertical scroll of scrollable ancestor
+    const hostEl = this.hostEl.nativeElement as HTMLElement;
+    const toSvgWithScroll = (clientX: number, clientY: number) => {
+      let scrollTop = 0;
+      if (!this.isHorizontal) {
+        let parent: HTMLElement | null = hostEl.parentElement;
+        while (parent) {
+          const style = window.getComputedStyle(parent);
+          if ((style.overflow + ' ' + style.overflowY).includes('auto') ||
+              (style.overflow + ' ' + style.overflowY).includes('scroll')) {
+            scrollTop = parent.scrollTop;
+            break;
+          }
+          parent = parent.parentElement;
+        }
+      }
+      return {
+        x: (clientX - svgRect.left + (this.isHorizontal ? el.scrollLeft : 0)) / this.zoom,
+        y: (clientY - svgRect.top + (!this.isHorizontal ? scrollTop : 0)) / this.zoom,
+      };
+    };
+
+    const p1 = toSvgWithScroll(this.dragStart.clientX, this.dragStart.clientY);
+    const p2 = toSvgWithScroll(e.clientX, e.clientY);
+
+    this.zoomBox = {
+      x: Math.min(p1.x, p2.x),
+      y: Math.min(p1.y, p2.y),
+      w: Math.abs(p2.x - p1.x),
+      h: Math.abs(p2.y - p1.y),
+    };
+  }
+
+  @HostListener('document:mouseup')
+  onDragEnd(): void {
+    if (this.resizing) {
+      this.resizing = false;
+      return;
+    }
+    if (!this.dragStart) return;
+
+    const box = this.zoomBox;
+    this.dragStart = null;
+    this.zoomBox = null;
+
+    if (!box || box.w < 10 || box.h < 10) return;
+
+    const el = this.graphScrollRef?.nativeElement;
+    if (!el) return;
+
+    // Determine visible viewport size
+    let viewportW: number;
+    let viewportH: number;
+
+    if (this.isHorizontal) {
+      viewportW = el.clientWidth;
+      // Find scrollable ancestor for vertical viewport
+      const hostEl = this.hostEl.nativeElement as HTMLElement;
+      let parent: HTMLElement | null = hostEl.parentElement;
+      viewportH = el.clientHeight;
+      while (parent) {
+        const style = window.getComputedStyle(parent);
+        if ((style.overflow + ' ' + style.overflowY).includes('auto') ||
+            (style.overflow + ' ' + style.overflowY).includes('scroll')) {
+          viewportH = parent.clientHeight;
+          break;
+        }
+        parent = parent.parentElement;
+      }
+    } else {
+      viewportW = el.clientWidth;
+      const hostEl = this.hostEl.nativeElement as HTMLElement;
+      let parent: HTMLElement | null = hostEl.parentElement;
+      viewportH = el.clientHeight;
+      while (parent) {
+        const style = window.getComputedStyle(parent);
+        if ((style.overflow + ' ' + style.overflowY).includes('auto') ||
+            (style.overflow + ' ' + style.overflowY).includes('scroll')) {
+          viewportH = parent.clientHeight;
+          break;
+        }
+        parent = parent.parentElement;
+      }
+    }
+
+    // Compute zoom to fit the box in viewport
+    const scaleX = viewportW / box.w;
+    const scaleY = viewportH / box.h;
+    const newZoom = Math.min(this.MAX_ZOOM, Math.max(this.MIN_ZOOM, Math.min(scaleX, scaleY)));
+    this.zoom = +newZoom.toFixed(2);
+
+    // Scroll to center the box
+    setTimeout(() => {
+      const centerX = (box.x + box.w / 2) * this.zoom;
+      const centerY = (box.y + box.h / 2) * this.zoom;
+
+      el.scrollTo({ left: Math.max(0, centerX - viewportW / 2), behavior: 'instant' });
+
+      // Vertical scroll via ancestor
+      const hostEl = this.hostEl.nativeElement as HTMLElement;
+      let parent: HTMLElement | null = hostEl.parentElement;
+      while (parent) {
+        const style = window.getComputedStyle(parent);
+        if ((style.overflow + ' ' + style.overflowY).includes('auto') ||
+            (style.overflow + ' ' + style.overflowY).includes('scroll')) {
+          const hostRect = hostEl.getBoundingClientRect();
+          const parentRect = parent.getBoundingClientRect();
+          const graphTop = hostRect.top - parentRect.top + parent.scrollTop;
+          parent.scrollTo({ top: Math.max(0, graphTop + centerY - viewportH / 2), behavior: 'instant' });
+          break;
+        }
+        parent = parent.parentElement;
+      }
+    });
   }
 
   adjustZoom(delta: number): void {
