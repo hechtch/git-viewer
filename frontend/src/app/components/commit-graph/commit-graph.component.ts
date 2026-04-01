@@ -164,11 +164,16 @@ export class CommitGraphComponent implements OnChanges {
       this.buildEdges();
       this.computeDimensions();
       this.buildChildrenMap();
-      if (changes['entries'] && this.viewMode === 'lr') {
-        setTimeout(() => {
-          const el = this.graphScrollRef?.nativeElement;
-          if (el) el.scrollLeft = el.scrollWidth;
-        });
+      if (changes['entries']) {
+        if (!this.selectedSha && this.renderNodes.length) {
+          this.selectNode(this.renderNodes[0]);
+        }
+        if (this.viewMode === 'lr') {
+          setTimeout(() => {
+            const el = this.graphScrollRef?.nativeElement;
+            if (el) el.scrollLeft = el.scrollWidth;
+          });
+        }
       }
     }
     if (changes['viewMode'] && !changes['viewMode'].firstChange) {
@@ -429,6 +434,8 @@ export class CommitGraphComponent implements OnChanges {
         }
         if (event.key === '0' && (event.ctrlKey || event.metaKey)) {
           this.zoom = 1.0; event.preventDefault();
+          const sel = this.renderNodes.find(n => n.entry.sha === this.selectedSha);
+          if (sel) setTimeout(() => this.scrollToNode(sel, 'instant'));
         }
         return;
     }
@@ -600,6 +607,10 @@ export class CommitGraphComponent implements OnChanges {
 
   adjustZoom(delta: number): void {
     this.zoom = Math.min(this.MAX_ZOOM, Math.max(this.MIN_ZOOM, +(this.zoom + delta).toFixed(2)));
+    const selected = this.renderNodes.find(n => n.entry.sha === this.selectedSha);
+    if (selected) {
+      setTimeout(() => this.scrollToNode(selected, 'instant'));
+    }
   }
 
   private scrollToNode(node: RenderNode, behavior: ScrollBehavior = 'smooth'): void {
