@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, HostListener, HostBinding, ViewChild, ElementRef, inject } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, HostListener, HostBinding, ViewChild, ElementRef, inject, ChangeDetectorRef } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
 
 import { BranchInfo, GraphEntry } from '../../services/git-api.service';
@@ -85,6 +85,7 @@ export class CommitGraphComponent implements OnChanges {
 
   @ViewChild('graphScroll') graphScrollRef: ElementRef<HTMLElement> | undefined;
   private hostEl = inject(ElementRef<HTMLElement>);
+  private cdr = inject(ChangeDetectorRef);
 
   renderNodes: RenderNode[] = [];
   allEdges: RenderEdge[] = [];
@@ -471,7 +472,7 @@ export class CommitGraphComponent implements OnChanges {
     const el = this.graphScrollRef?.nativeElement;
     if (!el) return;
 
-    const svgRect = el.querySelector('svg')?.getBoundingClientRect();
+    const svgRect = el.querySelector('.graph-svg')?.getBoundingClientRect();
     if (!svgRect) return;
 
     // Convert client coords to SVG viewBox coords
@@ -511,6 +512,7 @@ export class CommitGraphComponent implements OnChanges {
       w: Math.abs(p2.x - p1.x),
       h: Math.abs(p2.y - p1.y),
     };
+    this.cdr.detectChanges();
   }
 
   @HostListener('document:mouseup')

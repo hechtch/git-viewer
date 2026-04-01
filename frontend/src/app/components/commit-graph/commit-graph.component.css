@@ -230,20 +230,18 @@
   margin-left: 3px;
 }
 
-/* Zoom box overlay */
-.zoom-box-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  pointer-events: none;
-  z-index: 50;
+/* Zoom drag state — hide selection highlights */
+.zoom-dragging .hit-target,
+.zoom-dragging .lane-hit-target {
+  fill: transparent !important;
 }
 
 /* Zoom controls */
 .zoom-controls {
-  position: absolute;
+  position: sticky;
   bottom: 12px;
-  right: 12px;
+  float: right;
+  margin-right: 12px;
   display: flex;
   flex-direction: column;
   gap: 2px;

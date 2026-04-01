@@ -1,4 +1,4 @@
-<div class="graph-container" [class.mode-td]="!isHorizontal" [class.show-hover]="showMouseHover" (mousemove)="onMouseMove()">
+<div class="graph-container" [class.mode-td]="!isHorizontal" [class.show-hover]="showMouseHover" [class.zoom-dragging]="zoomBox" (mousemove)="onMouseMove()">
   <div class="toast-bar">
     @if (toastVisible) {
       <div class="toast"
@@ -195,13 +195,8 @@
           </text>
         </g>
       }
-    </svg>
-
-    @if (zoomBox) {
-      <svg class="zoom-box-overlay"
-           [attr.width]="svgWidth * zoom"
-           [attr.height]="svgHeight * zoom"
-           [attr.viewBox]="'0 0 ' + svgWidth + ' ' + svgHeight">
+      <!-- Zoom box selection -->
+      @if (zoomBox) {
         <rect
           [attr.x]="zoomBox.x"
           [attr.y]="zoomBox.y"
@@ -211,15 +206,10 @@
           stroke="#89b4fa"
           stroke-width="1.5"
           stroke-dasharray="6,3"
-          rx="3"/>
-      </svg>
-    }
-  </div>
-
-  <div class="zoom-controls">
-    <button class="zoom-btn" (click)="adjustZoom(ZOOM_STEP)" title="Zoom in">+</button>
-    <button class="zoom-btn zoom-btn-level" (click)="zoom = 1.0" title="Reset zoom">{{ (zoom * 100) | number:'1.0-0' }}%</button>
-    <button class="zoom-btn" (click)="adjustZoom(-ZOOM_STEP)" title="Zoom out">−</button>
+          rx="3"
+          pointer-events="none"/>
+      }
+    </svg>
   </div>
 
   @if (statusTooltip) {
@@ -229,4 +219,10 @@
       {{ statusTooltip.text }}
     </div>
   }
+</div>
+
+<div class="zoom-controls">
+  <button class="zoom-btn" (click)="adjustZoom(ZOOM_STEP)" title="Zoom in">+</button>
+  <button class="zoom-btn zoom-btn-level" (click)="zoom = 1.0" title="Reset zoom">{{ (zoom * 100) | number:'1.0-0' }}%</button>
+  <button class="zoom-btn" (click)="adjustZoom(-ZOOM_STEP)" title="Zoom out">−</button>
 </div>
