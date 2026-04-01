@@ -44,6 +44,9 @@ interface CommitRow extends CommitSummary {
             <button class="toggle-merged-btn" (click)="showMerged = !showMerged">
               {{ showMerged ? 'Hide merged' : 'Show merged' }}
             </button>
+            <button class="toggle-merged-btn" (click)="showNames = !showNames">
+              {{ showNames ? 'Hide names' : 'Show names' }}
+            </button>
           </div>
         }
       </div>
@@ -68,6 +71,7 @@ interface CommitRow extends CommitSummary {
           [branches]="visibleBranchInfos"
           [currentBranch]="currentBranch"
           [showMerged]="showMerged"
+          [showNames]="showNames"
           [viewMode]="viewMode"
           [jumpToBranch]="jumpToBranch"
           (commitSelected)="selectCommit($event)">
@@ -258,6 +262,7 @@ export class CommitLogComponent implements OnChanges {
   currentBranch = '';
   selectedSha = '';
   showMerged = true;
+  showNames = true;
   viewMode: 'lr' | 'rl' | 'td' | 'bu' = 'lr';
   searchQuery = '';
   searchError = '';

@@ -72,6 +72,7 @@ export class CommitGraphComponent implements OnChanges {
   @Input() branches: BranchInfo[] = [];
   @Input() currentBranch = '';
   @Input() showMerged = true;
+  @Input() showNames = true;
   @Input() jumpToBranch: string | null = null;
   @Input() viewMode: 'lr' | 'rl' | 'td' | 'bu' = 'lr';
   @Output() commitSelected = new EventEmitter<string>();

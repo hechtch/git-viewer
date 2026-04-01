@@ -152,7 +152,7 @@
           }
 
           <!-- Ref badges -->
-          @for (badge of node.badges; track badge; let i = $index) {
+          @for (badge of (showNames ? node.badges : []); track badge; let i = $index) {
             <g>
               <rect
                 [attr.x]="badgeRectX(node.row, node.col, badge.width, i)"
