@@ -138,6 +138,12 @@ export class CommitGraphComponent implements OnChanges {
       this.buildEdges();
       this.computeDimensions();
       this.buildChildrenMap();
+      if (changes['entries'] && this.viewMode === 'lr') {
+        setTimeout(() => {
+          const el = this.graphScrollRef?.nativeElement;
+          if (el) el.scrollLeft = el.scrollWidth;
+        });
+      }
     }
     if (changes['viewMode'] && !changes['viewMode'].firstChange) {
       const labels: Record<string, string> = {
@@ -150,7 +156,12 @@ export class CommitGraphComponent implements OnChanges {
       // Scroll first (instant), then measure the rect and show the toast
       setTimeout(() => {
         const node = this.renderNodes.find(n => n.entry.sha === this.selectedSha);
-        if (node) this.scrollToNode(node, 'instant');
+        if (node) {
+          this.scrollToNode(node, 'instant');
+        } else if (this.viewMode === 'lr') {
+          const el = this.graphScrollRef?.nativeElement;
+          if (el) el.scrollLeft = el.scrollWidth;
+        }
         this.showToast(label, true);
       });
     }
