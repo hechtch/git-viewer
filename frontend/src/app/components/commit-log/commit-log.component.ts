@@ -114,7 +114,8 @@ interface CommitRow extends CommitSummary {
     </div>
     `,
     styles: [`
-    .commit-log { padding: 12px; }
+    :host { display: block; height: 100%; }
+    .commit-log { padding: 12px; display: flex; flex-direction: column; height: 100%; box-sizing: border-box; min-height: 0; }
     .log-sticky {
       position: sticky;
       top: 0;

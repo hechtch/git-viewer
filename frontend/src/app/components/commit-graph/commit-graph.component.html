@@ -15,7 +15,7 @@
 
   <!-- LR mode: pinned lane labels on the left -->
   @if (isHorizontal) {
-    <div class="lane-labels" [style.width.px]="labelsWidth" [style.height.px]="svgHeight * zoom">
+    <div class="lane-labels" [style.width.px]="labelsWidth" [style.transform]="'translateY(' + laneLabelsOffset + 'px)'">
       @for (lane of visibleLaneLabels; track lane) {
         <div
           class="lane-label-row"
@@ -53,7 +53,7 @@
   }
 
   <!-- Horizontally scrollable graph -->
-  <div class="graph-scroll" #graphScroll (mousedown)="onGraphMouseDown($event)">
+  <div class="graph-scroll" #graphScroll (mousedown)="onGraphMouseDown($event)" (scroll)="onGraphScroll()">
     <svg
       [attr.width]="svgWidth * zoom"
       [attr.height]="svgHeight * zoom"

@@ -86,6 +86,7 @@ export class CommitGraphComponent implements OnChanges {
   readonly BADGE_PAD = 12;
 
   @ViewChild('graphScroll') graphScrollRef: ElementRef<HTMLElement> | undefined;
+  @ViewChild('laneLabelsEl') laneLabelsRef: ElementRef<HTMLElement> | undefined;
   private hostEl = inject(ElementRef<HTMLElement>);
   private cdr = inject(ChangeDetectorRef);
 
@@ -482,6 +483,15 @@ export class CommitGraphComponent implements OnChanges {
   zoomBox: { x: number; y: number; w: number; h: number } | null = null;
   private dragStart: { clientX: number; clientY: number } | null = null;
 
+  laneLabelsOffset = 0;
+
+  onGraphScroll(): void {
+    const el = this.graphScrollRef?.nativeElement;
+    if (el) {
+      this.laneLabelsOffset = -el.scrollTop;
+    }
+  }
+
   onGraphMouseDown(event: MouseEvent): void {
     if (!(event.ctrlKey || event.metaKey)) return;
     event.preventDefault();
@@ -506,33 +516,11 @@ export class CommitGraphComponent implements OnChanges {
     // Convert client coords to SVG viewBox coords
     const toSvg = (clientX: number, clientY: number) => ({
       x: (clientX - svgRect.left + el.scrollLeft) / this.zoom,
-      y: (clientY - svgRect.top) / this.zoom,
+      y: (clientY - svgRect.top + el.scrollTop) / this.zoom,
     });
 
-    // Also account for vertical scroll of scrollable ancestor
-    const hostEl = this.hostEl.nativeElement as HTMLElement;
-    const toSvgWithScroll = (clientX: number, clientY: number) => {
-      let scrollTop = 0;
-      if (!this.isHorizontal) {
-        let parent: HTMLElement | null = hostEl.parentElement;
-        while (parent) {
-          const style = window.getComputedStyle(parent);
-          if ((style.overflow + ' ' + style.overflowY).includes('auto') ||
-              (style.overflow + ' ' + style.overflowY).includes('scroll')) {
-            scrollTop = parent.scrollTop;
-            break;
-          }
-          parent = parent.parentElement;
-        }
-      }
-      return {
-        x: (clientX - svgRect.left + (this.isHorizontal ? el.scrollLeft : 0)) / this.zoom,
-        y: (clientY - svgRect.top + (!this.isHorizontal ? scrollTop : 0)) / this.zoom,
-      };
-    };
-
-    const p1 = toSvgWithScroll(this.dragStart.clientX, this.dragStart.clientY);
-    const p2 = toSvgWithScroll(e.clientX, e.clientY);
+    const p1 = toSvg(this.dragStart.clientX, this.dragStart.clientY);
+    const p2 = toSvg(e.clientX, e.clientY);
 
     this.zoomBox = {
       x: Math.min(p1.x, p2.x),
@@ -561,39 +549,8 @@ export class CommitGraphComponent implements OnChanges {
     if (!el) return;
 
     // Determine visible viewport size
-    let viewportW: number;
-    let viewportH: number;
-
-    if (this.isHorizontal) {
-      viewportW = el.clientWidth;
-      // Find scrollable ancestor for vertical viewport
-      const hostEl = this.hostEl.nativeElement as HTMLElement;
-      let parent: HTMLElement | null = hostEl.parentElement;
-      viewportH = el.clientHeight;
-      while (parent) {
-        const style = window.getComputedStyle(parent);
-        if ((style.overflow + ' ' + style.overflowY).includes('auto') ||
-            (style.overflow + ' ' + style.overflowY).includes('scroll')) {
-          viewportH = parent.clientHeight;
-          break;
-        }
-        parent = parent.parentElement;
-      }
-    } else {
-      viewportW = el.clientWidth;
-      const hostEl = this.hostEl.nativeElement as HTMLElement;
-      let parent: HTMLElement | null = hostEl.parentElement;
-      viewportH = el.clientHeight;
-      while (parent) {
-        const style = window.getComputedStyle(parent);
-        if ((style.overflow + ' ' + style.overflowY).includes('auto') ||
-            (style.overflow + ' ' + style.overflowY).includes('scroll')) {
-          viewportH = parent.clientHeight;
-          break;
-        }
-        parent = parent.parentElement;
-      }
-    }
+    const viewportW = el.clientWidth;
+    const viewportH = el.clientHeight;
 
     // Compute zoom to fit the box in viewport
     const scaleX = viewportW / box.w;
@@ -605,24 +562,11 @@ export class CommitGraphComponent implements OnChanges {
     setTimeout(() => {
       const centerX = (box.x + box.w / 2) * this.zoom;
       const centerY = (box.y + box.h / 2) * this.zoom;
-
-      el.scrollTo({ left: Math.max(0, centerX - viewportW / 2), behavior: 'instant' });
-
-      // Vertical scroll via ancestor
-      const hostEl = this.hostEl.nativeElement as HTMLElement;
-      let parent: HTMLElement | null = hostEl.parentElement;
-      while (parent) {
-        const style = window.getComputedStyle(parent);
-        if ((style.overflow + ' ' + style.overflowY).includes('auto') ||
-            (style.overflow + ' ' + style.overflowY).includes('scroll')) {
-          const hostRect = hostEl.getBoundingClientRect();
-          const parentRect = parent.getBoundingClientRect();
-          const graphTop = hostRect.top - parentRect.top + parent.scrollTop;
-          parent.scrollTo({ top: Math.max(0, graphTop + centerY - viewportH / 2), behavior: 'instant' });
-          break;
-        }
-        parent = parent.parentElement;
-      }
+      el.scrollTo({
+        left: Math.max(0, centerX - viewportW / 2),
+        top: Math.max(0, centerY - viewportH / 2),
+        behavior: 'instant',
+      });
     });
   }
 
@@ -638,45 +582,13 @@ export class CommitGraphComponent implements OnChanges {
     const el = this.graphScrollRef?.nativeElement;
     if (!el) return;
 
-    if (this.isHorizontal) {
-      // Horizontal: center in graph-scroll
-      const x = this.nodeX(node.row, node.col) * this.zoom;
-      el.scrollTo({ left: Math.max(0, x - el.clientWidth / 2), behavior });
-
-      // Vertical: find scrollable ancestor, center the lane
-      const hostEl = this.hostEl.nativeElement as HTMLElement;
-      let parent: HTMLElement | null = hostEl.parentElement;
-      while (parent) {
-        const style = window.getComputedStyle(parent);
-        if ((style.overflow + ' ' + style.overflowY).includes('auto') ||
-            (style.overflow + ' ' + style.overflowY).includes('scroll')) {
-          const y = this.nodeY(node.row, node.col) * this.zoom;
-          const hostRect = hostEl.getBoundingClientRect();
-          const parentRect = parent.getBoundingClientRect();
-          const graphTop = hostRect.top - parentRect.top + parent.scrollTop;
-          parent.scrollTo({ top: Math.max(0, graphTop + y - parent.clientHeight / 2), behavior });
-          break;
-        }
-        parent = parent.parentElement;
-      }
-    } else {
-      // TD/BU: find scrollable ancestor (graph-scroll is not height-constrained), center the node
-      const hostEl = this.hostEl.nativeElement as HTMLElement;
-      let parent: HTMLElement | null = hostEl.parentElement;
-      while (parent) {
-        const style = window.getComputedStyle(parent);
-        if ((style.overflow + ' ' + style.overflowY).includes('auto') ||
-            (style.overflow + ' ' + style.overflowY).includes('scroll')) {
-          const y = this.nodeY(node.row, node.col) * this.zoom;
-          const hostRect = hostEl.getBoundingClientRect();
-          const parentRect = parent.getBoundingClientRect();
-          const graphTop = hostRect.top - parentRect.top + parent.scrollTop;
-          parent.scrollTo({ top: Math.max(0, graphTop + y - parent.clientHeight / 2), behavior });
-          break;
-        }
-        parent = parent.parentElement;
-      }
-    }
+    const x = this.nodeX(node.row, node.col) * this.zoom;
+    const y = this.nodeY(node.row, node.col) * this.zoom;
+    el.scrollTo({
+      left: Math.max(0, x - el.clientWidth / 2),
+      top: Math.max(0, y - el.clientHeight / 2),
+      behavior,
+    });
   }
 
   // ── Lane / cross-lane navigation ──────────────────────────────────────────
@@ -713,20 +625,8 @@ export class CommitGraphComponent implements OnChanges {
     if (this.toastTimer) clearTimeout(this.toastTimer);
     requestAnimationFrame(() => {
       if (prominent) {
-        // Walk up to the scrollable container (commit-log-panel) — it has a stable visible size
-        // in all modes, unlike the host element which is SVG-height tall in TD/BU.
-        const hostEl = this.hostEl.nativeElement as HTMLElement;
-        let rect: DOMRect = hostEl.getBoundingClientRect();
-        let parent: HTMLElement | null = hostEl.parentElement;
-        while (parent) {
-          const style = window.getComputedStyle(parent);
-          if ((style.overflow + ' ' + style.overflowY).includes('auto') ||
-              (style.overflow + ' ' + style.overflowY).includes('scroll')) {
-            rect = parent.getBoundingClientRect();
-            break;
-          }
-          parent = parent.parentElement;
-        }
+        const el = this.graphScrollRef?.nativeElement;
+        const rect = el ? el.getBoundingClientRect() : this.hostEl.nativeElement.getBoundingClientRect();
         this.toastCx = rect.left + rect.width / 2;
         this.toastCy = rect.top + rect.height / 2;
       }

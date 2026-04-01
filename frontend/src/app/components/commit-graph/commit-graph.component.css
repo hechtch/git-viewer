@@ -1,5 +1,8 @@
 :host {
   display: block;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .toast-bar {
@@ -49,12 +52,14 @@
   flex-direction: row;
   overflow: visible;
   position: relative;
+  height: 100%;
 }
 
 .lane-labels {
   flex-shrink: 0;
   position: relative;
   overflow: hidden;
+  height: 100%;
 }
 
 .lane-labels-resizer {
@@ -110,8 +115,7 @@
 
 .graph-scroll {
   flex: 1;
-  overflow-x: auto;
-  overflow-y: hidden;
+  overflow: auto;
   position: relative;
 }
 
