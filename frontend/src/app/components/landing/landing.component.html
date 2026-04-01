@@ -1,0 +1,44 @@
+<div class="landing">
+  <div class="landing-content">
+    <div class="app-title">
+      <span class="title-icon">⎇</span>
+      <h1>Git Viewer</h1>
+    </div>
+
+    @if (recentRepos.length > 0) {
+      <section class="recent-section">
+        <h2>Recent Repositories</h2>
+        <ul class="repo-list">
+          @for (repo of recentRepos; track repo.path) {
+            <li
+              class="repo-item"
+              [class.loading]="loadingPath === repo.path"
+              [class.disabled]="loadingPath !== null && loadingPath !== repo.path"
+              (click)="openRecent(repo)">
+              <span class="repo-icon">📁</span>
+              <div class="repo-info">
+                <span class="repo-name">{{ repo.name }}</span>
+                <span class="repo-path">{{ repo.path }}</span>
+              </div>
+              <span class="repo-date">{{ formatDate(repo.lastOpened) }}</span>
+              @if (loadingPath === repo.path) {
+                <span class="spinner"></span>
+              }
+              <button class="remove-btn" title="Remove from list" (click)="removeRecent(repo, $event)">✕</button>
+            </li>
+          }
+        </ul>
+      </section>
+    } @else {
+      <div class="empty-state">
+        <p>No recent repositories</p>
+      </div>
+    }
+
+    @if (error) {
+      <div class="error">{{ error }}</div>
+    }
+
+    <button class="open-btn" (click)="openSelector.emit()">Open other repository...</button>
+  </div>
+</div>

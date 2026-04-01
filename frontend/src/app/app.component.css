@@ -48,13 +48,6 @@
   overflow: hidden;
 }
 
-.sidebar {
-  width: 220px;
-  border-right: 1px solid #313244;
-  overflow-y: auto;
-  flex-shrink: 0;
-}
-
 .content {
   flex: 1;
   overflow-y: auto;
@@ -101,11 +94,18 @@
 }
 
 .commit-log-panel {
-  max-height: 45vh;
   overflow: auto;
   flex-shrink: 0;
-  border-bottom: 1px solid #313244;
 }
+
+.h-resizer {
+  flex-shrink: 0;
+  height: 5px;
+  cursor: row-resize;
+  background: #313244;
+  transition: background 0.1s;
+}
+.h-resizer:hover { background: #89b4fa; }
 
 .commit-detail-panel {
   flex: 1;

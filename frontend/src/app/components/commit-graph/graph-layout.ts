@@ -27,6 +27,22 @@ export interface LayoutNode {
 }
 
 /**
+ * Extract base branch names from a ref list, stripping remote prefixes.
+ * e.g. ["origin/master", "work/master"] → {"master"}
+ *      ["HEAD -> feature/foo"] → {"feature/foo"}
+ */
+function refBaseNames(refs: string[]): Set<string> {
+  const bases = new Set<string>();
+  for (const r of refs) {
+    if (r.startsWith('tag: ')) continue;
+    const clean = r.replace('HEAD -> ', '');
+    const slash = clean.indexOf('/');
+    bases.add(slash >= 0 ? clean.substring(slash + 1) : clean);
+  }
+  return bases;
+}
+
+/**
  * Assigns each branch its own dedicated column by tracing first-parent
  * lineage from each branch tip. Commits on the main line (first branch
  * tip with HEAD or column 0) get column 0; each other branch gets its
@@ -64,12 +80,24 @@ export function computeLayout(entries: GraphEntry[]): LayoutNode[] {
   let nextCol = 0;
   for (const tip of tips) {
     const col = nextCol++;
+    const tipBases = refBaseNames(entries[tip.idx].refs);
     // Trace first-parent chain from this tip, stopping before another branch's tip
     let sha = entries[tip.idx].sha;
     let isFirst = true;
     while (sha) {
       if (branchOf.has(sha)) break; // already claimed by an earlier branch
-      if (!isFirst && tipShas.has(sha)) break; // don't absorb another branch's tip
+      if (!isFirst && tipShas.has(sha)) {
+        // Allow absorbing if the blocking tip shares a base branch name
+        // (same logical branch on a different remote)
+        const blockerIdx = shaToIdx.get(sha);
+        if (blockerIdx !== undefined) {
+          const blockerBases = refBaseNames(entries[blockerIdx].refs);
+          const sameLogicalBranch = [...tipBases].some(b => blockerBases.has(b));
+          if (!sameLogicalBranch) break;
+        } else {
+          break;
+        }
+      }
       branchOf.set(sha, col);
       const entry = entries[shaToIdx.get(sha) ?? 0];
       sha = entry.parents.length > 0 ? entry.parents[0] : '';

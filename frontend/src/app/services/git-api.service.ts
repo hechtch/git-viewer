@@ -8,8 +8,9 @@ export interface BranchInfo {
   sha: string;
   date: string;
   subject: string;
-  ahead?: number;      // commits ahead of trunk; undefined for the trunk branch itself
-  behind?: number;     // commits behind trunk; undefined for the trunk branch itself
+  ahead?: number;      // commits ahead of base; undefined for the trunk branch itself
+  behind?: number;     // commits behind base; undefined for the trunk branch itself
+  base?: string;       // branch this is compared against (trunk, or nearest ancestor branch)
   upstream?: string;   // remote tracking ref e.g. "origin/main"; undefined = no remote
   localAhead?: number; // unpushed commits (local commits not on remote)
   localBehind?: number;// commits on remote not yet fetched locally
@@ -60,7 +61,13 @@ export interface GraphEntry {
 }
 
 export interface RepoInfo {
+  path: string | null;
+}
+
+export interface RecentRepo {
   path: string;
+  name: string;
+  lastOpened: string;
 }
 
 export interface BrowseEntry {
@@ -103,6 +110,14 @@ export class GitApiService {
 
   setRepo(path: string): Observable<RepoInfo> {
     return this.http.post<RepoInfo>(`${this.base}/repo`, { path });
+  }
+
+  getRecentRepos(): Observable<RecentRepo[]> {
+    return this.http.get<RecentRepo[]>(`${this.base}/recent-repos`);
+  }
+
+  removeRecentRepo(path: string): Observable<void> {
+    return this.http.delete<void>(`${this.base}/recent-repos`, { body: { path } });
   }
 
   getBranches(): Observable<BranchesResponse> {

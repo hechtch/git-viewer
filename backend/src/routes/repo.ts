@@ -1,16 +1,18 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import * as path from 'path';
 import { GitService } from '../services/git.service';
+import { addRecentRepo } from '../services/recent-repos.service';
 
 export function repoRoutes(
-  getGit: () => GitService,
+  getGit: () => GitService | null,
   setGit: (git: GitService) => void
 ): Router {
   const router = Router();
 
-  // GET /api/repo — return current repo path
+  // GET /api/repo — return current repo path (null if none selected)
   router.get('/', (req: Request, res: Response) => {
-    res.json({ path: getGit()['repoPath'] });
+    const current = getGit();
+    res.json({ path: current ? current['repoPath'] : null });
   });
 
   // POST /api/repo — set a new repo path
@@ -30,6 +32,7 @@ export function repoRoutes(
     }
 
     setGit(candidate);
+    addRecentRepo(resolved);
     res.json({ path: resolved });
   });
 

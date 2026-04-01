@@ -66,15 +66,42 @@ export class GitService {
       || current
       || parsed[0]?.name;
 
-    const computeAheadBehind = async (refName: string): Promise<{ ahead: number; behind: number } | Record<string, never>> => {
-      if (!baseBranch || refName === baseBranch) return {};
+    const revListCount = async (base: string, ref: string): Promise<{ ahead: number; behind: number }> => {
       try {
-        const counts = await this.git('rev-list', '--left-right', '--count', `${baseBranch}...${refName}`);
+        const counts = await this.git('rev-list', '--left-right', '--count', `${base}...${ref}`);
         const [behind, ahead] = counts.split('\t').map(Number);
         return { ahead, behind };
       } catch {
         return { ahead: 0, behind: 0 };
       }
+    };
+
+    // For remote branches, always compare against trunk.
+    // For local branches, also check whether a closer local branch (smaller ahead count)
+    // makes a better base — e.g. a feature branch off a release candidate should report
+    // "ahead of rc-1.0" rather than "ahead of main".
+    const computeAheadBehind = async (refName: string, checkNearerBase = false):
+        Promise<{ ahead: number; behind: number; base: string } | Record<string, never>> => {
+      if (!baseBranch || refName === baseBranch) return {};
+
+      const trunkCounts = await revListCount(baseBranch, refName);
+      let best: { base: string; ahead: number; behind: number } = { base: baseBranch, ...trunkCounts };
+
+      if (checkNearerBase) {
+        for (const candidate of parsed) {
+          if (candidate.name === refName || candidate.name === baseBranch) continue;
+          try {
+            const aheadRaw = await this.git('rev-list', '--count', `${candidate.name}..${refName}`);
+            const aheadCount = parseInt(aheadRaw, 10);
+            if (aheadCount < best.ahead) {
+              const behindRaw = await this.git('rev-list', '--count', `${refName}..${candidate.name}`);
+              best = { base: candidate.name, ahead: aheadCount, behind: parseInt(behindRaw, 10) };
+            }
+          } catch { /* skip candidates that fail */ }
+        }
+      }
+
+      return best;
     };
 
     // Build a set of remote ref names for fast lookup
@@ -100,7 +127,7 @@ export class GitService {
     };
 
     const [localBranches, remoteBranches] = await Promise.all([
-      Promise.all(parsed.map(async (b) => ({ ...await resolveLocalPushStatus(b), ...await computeAheadBehind(b.name) }))),
+      Promise.all(parsed.map(async (b) => ({ ...await resolveLocalPushStatus(b), ...await computeAheadBehind(b.name, true) }))),
       Promise.all(remotes.map(async (r) => ({ ...r, isRemote: true, ...await computeAheadBehind(r.name) }))),
     ]);
 
@@ -267,8 +294,9 @@ export interface BranchInfo {
   sha: string;
   date: string;
   subject: string;
-  ahead?: number;      // commits ahead of trunk; undefined for the trunk branch itself
-  behind?: number;     // commits behind trunk; undefined for the trunk branch itself
+  ahead?: number;      // commits ahead of base; undefined for the trunk branch itself
+  behind?: number;     // commits behind base; undefined for the trunk branch itself
+  base?: string;       // branch this is compared against (trunk, or nearest ancestor branch)
   upstream?: string;   // remote tracking ref, e.g. "origin/main"; undefined = no remote
   localAhead?: number; // unpushed commits (local commits not on remote)
   localBehind?: number;// commits on remote not yet fetched locally

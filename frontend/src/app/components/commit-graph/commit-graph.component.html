@@ -1,4 +1,4 @@
-<div class="graph-container" [class.mode-td]="!isHorizontal" [class.show-hover]="showMouseHover" (mousemove)="onMouseMove()">
+<div class="graph-container" [class.mode-td]="!isHorizontal" [class.show-hover]="showMouseHover" [class.zoom-dragging]="zoomBox" (mousemove)="onMouseMove()">
   <div class="toast-bar">
     @if (toastVisible) {
       <div class="toast"
@@ -15,15 +15,15 @@
 
   <!-- LR mode: pinned lane labels on the left -->
   @if (isHorizontal) {
-    <div class="lane-labels" [style.height.px]="svgHeight * zoom">
-      @for (lane of laneLabels; track lane) {
+    <div class="lane-labels" [style.width.px]="labelsWidth" [style.transform]="'translateY(' + laneLabelsOffset + 'px)'">
+      @for (lane of visibleLaneLabels; track lane) {
         <div
           class="lane-label-row"
           [class.lane-label-row-selected]="lane.col === selectedCol"
-          [class.lane-label-row-hidden]="!showMerged && lane.merged"
-          [class.lane-label-row-merged]="showMerged && lane.merged"
+          [class.lane-label-row-merged]="lane.merged"
           [style.top.px]="(lanePrimaryPos(lane.col) - LANE_HEIGHT / 2) * zoom"
-          [style.height.px]="LANE_HEIGHT * zoom">
+          [style.height.px]="LANE_HEIGHT * zoom"
+          (click)="jumpToNamedBranch(lane.name)">
           <span
             class="lane-label"
             [class.lane-label-selected]="lane.col === selectedCol"
@@ -38,7 +38,8 @@
               class="lane-status-badge"
               [class.lane-status-merged]="s.isMerged"
               [class.lane-status-ahead]="!s.isMerged"
-              [attr.data-tooltip]="s.isMerged ? null : s.tooltip">
+              (mouseenter)="s.isMerged ? null : showStatusTooltip($event, s.tooltip)"
+              (mouseleave)="hideStatusTooltip()">
               {{ s.label }}
               @if (s.localAhead > 0) {
                 <span class="badge-remote-ahead">▲{{ s.localAhead }}</span>
@@ -48,10 +49,11 @@
         </div>
       }
     </div>
+    <div class="lane-labels-resizer" (mousedown)="startResize($event)"></div>
   }
 
   <!-- Horizontally scrollable graph -->
-  <div class="graph-scroll" #graphScroll (wheel)="onWheel($event)">
+  <div class="graph-scroll" #graphScroll (mousedown)="onGraphMouseDown($event)" (scroll)="onGraphScroll()">
     <svg
       [attr.width]="svgWidth * zoom"
       [attr.height]="svgHeight * zoom"
@@ -60,7 +62,7 @@
 
       <!-- Lane background rows (LR) or columns (TD) -->
       <g class="lane-rows">
-        @for (lane of laneLabels; track lane) {
+        @for (lane of visibleLaneLabels; track lane) {
           @if (isHorizontal) {
             <rect
               x="0"
@@ -70,7 +72,6 @@
               fill="transparent"
               class="lane-hit-target"
               [class.lane-selected]="lane.col === selectedCol"
-              [class.lane-merged-hidden]="!showMerged && lane.merged"
               />
           } @else {
             <rect
@@ -81,7 +82,6 @@
               fill="transparent"
               class="lane-hit-target"
               [class.lane-selected]="lane.col === selectedCol"
-              [class.lane-merged-hidden]="!showMerged && lane.merged"
               />
           }
         }
@@ -89,38 +89,34 @@
 
       <!-- Lane guide lines -->
       <g class="lane-guides">
-        @for (lane of laneLabels; track lane) {
+        @for (lane of visibleLaneLabels; track lane) {
           @if (isHorizontal) {
             <line
               x1="0" [attr.y1]="lanePrimaryPos(lane.col)"
               [attr.x2]="svgWidth" [attr.y2]="lanePrimaryPos(lane.col)"
               stroke="#313244" stroke-width="1" stroke-dasharray="4,4"
-              [style.display]="!showMerged && mergedCols.has(lane.col) ? 'none' : null"
-              [class.merged-dim]="showMerged && mergedCols.has(lane.col)"/>
+              [class.merged-dim]="lane.merged"/>
           } @else {
             <line
               [attr.x1]="lanePrimaryPos(lane.col)" y1="0"
               [attr.x2]="lanePrimaryPos(lane.col)" [attr.y2]="svgHeight"
               stroke="#313244" stroke-width="1" stroke-dasharray="4,4"
-              [style.display]="!showMerged && mergedCols.has(lane.col) ? 'none' : null"
-              [class.merged-dim]="showMerged && mergedCols.has(lane.col)"/>
+              [class.merged-dim]="lane.merged"/>
           }
         }
       </g>
 
       <!-- Edges -->
       <g class="edges">
-        @for (edge of allEdges; track edge) {
+        @for (edge of visibleEdges; track edge) {
           <path [attr.d]="edge.path" [attr.stroke]="edge.color" stroke-width="2" fill="none"
-                [style.display]="!showMerged && edge.merged ? 'none' : null"
-                [class.merged-dim]="showMerged && edge.merged"/>
+                [class.merged-dim]="edge.merged || (!showMerged && edge.bridging)"/>
         }
       </g>
 
       <!-- Nodes -->
-      @for (node of renderNodes; track node) {
-        <g [style.display]="!showMerged && mergedCols.has(node.col) ? 'none' : null"
-           [class.merged-dim]="showMerged && mergedCols.has(node.col)">
+      @for (node of visibleNodes; track node) {
+        <g [class.merged-dim]="mergedCols.has(node.col)">
           <!-- Hit target: vertical stripe (LR) or horizontal stripe (TD) -->
           @if (isHorizontal) {
             <rect
@@ -149,7 +145,7 @@
           }
 
           <!-- Ref badges -->
-          @for (badge of node.badges; track badge; let i = $index) {
+          @for (badge of (showNames ? node.badges : []); track badge; let i = $index) {
             <g>
               <rect
                 [attr.x]="badgeRectX(node.row, node.col, badge.width, i)"
@@ -192,6 +188,34 @@
           </text>
         </g>
       }
+      <!-- Zoom box selection -->
+      @if (zoomBox) {
+        <rect
+          [attr.x]="zoomBox.x"
+          [attr.y]="zoomBox.y"
+          [attr.width]="zoomBox.w"
+          [attr.height]="zoomBox.h"
+          fill="rgba(137, 180, 250, 0.15)"
+          stroke="#89b4fa"
+          stroke-width="1.5"
+          stroke-dasharray="6,3"
+          rx="3"
+          pointer-events="none"/>
+      }
     </svg>
   </div>
+
+  @if (statusTooltip) {
+    <div class="status-tooltip"
+         [style.left.px]="statusTooltip.x"
+         [style.top.px]="statusTooltip.y">
+      {{ statusTooltip.text }}
+    </div>
+  }
+</div>
+
+<div class="zoom-controls">
+  <button class="zoom-btn" (click)="adjustZoom(ZOOM_STEP)" title="Zoom in">+</button>
+  <button class="zoom-btn zoom-btn-level" (click)="zoom = 1.0" title="Reset zoom">{{ (zoom * 100) | number:'1.0-0' }}%</button>
+  <button class="zoom-btn" (click)="adjustZoom(-ZOOM_STEP)" title="Zoom out">−</button>
 </div>

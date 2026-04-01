@@ -1,16 +1,14 @@
-import { Component, Input, Output, EventEmitter, inject } from '@angular/core';
-
-import { FormsModule } from '@angular/forms';
+import { Component, Input, Output, EventEmitter, OnInit, inject } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
-import { GitApiService } from '../../services/git-api.service';
+import { GitApiService, RecentRepo, BrowseResponse, BrowseEntry } from '../../services/git-api.service';
 
 @Component({
     selector: 'app-repo-selector',
-    imports: [FormsModule],
+    standalone: true,
     templateUrl: './repo-selector.component.html',
     styleUrls: ['./repo-selector.component.css']
 })
-export class RepoSelectorComponent {
+export class RepoSelectorComponent implements OnInit {
   private api = inject(GitApiService);
 
   @Input() canCancel = false;
@@ -18,79 +16,102 @@ export class RepoSelectorComponent {
 
   @Output() repoOpened = new EventEmitter<string>();
 
-  selectedPath = '';
+  recentRepos: RecentRepo[] = [];
   loading = false;
-  picking = false;
+  loadingPath: string | null = null;
   error = '';
-  dragOver = false;
 
-  pickFolder(): void {
-    this.picking = true;
-    this.error = '';
-    this.api.pickFolder(this.initialPath || undefined).subscribe({
-      next: (result) => {
-        this.picking = false;
-        if (result?.path) {
-          this.selectedPath = result.path;
-          this.open();
-        }
+  // In-app folder browser state
+  browsing = false;
+  browseData: BrowseResponse | null = null;
+  browseLoading = false;
+  browseError = '';
+
+  ngOnInit(): void {
+    this.api.getRecentRepos().subscribe({
+      next: (repos) => { this.recentRepos = repos; },
+      error: () => {}
+    });
+  }
+
+  startBrowse(): void {
+    this.browsing = true;
+    this.browseError = '';
+    this.navigateTo(this.initialPath || undefined);
+  }
+
+  navigateTo(path?: string): void {
+    this.browseLoading = true;
+    this.browseError = '';
+    this.api.browse(path).subscribe({
+      next: (data) => {
+        this.browseData = data;
+        this.browseLoading = false;
       },
       error: () => {
-        this.picking = false;
-        this.error = 'Could not open folder picker (is the backend running?)';
+        this.browseError = 'Could not load directory';
+        this.browseLoading = false;
       }
     });
   }
 
-  onDragOver(event: DragEvent): void {
-    event.preventDefault();
-    event.stopPropagation();
-    this.dragOver = true;
-  }
-
-  onDragLeave(): void {
-    this.dragOver = false;
-  }
-
-  onDrop(event: DragEvent): void {
-    event.preventDefault();
-    event.stopPropagation();
-    this.dragOver = false;
-
-    const items = event.dataTransfer?.items;
-    if (!items) return;
-
-    for (const item of Array.from(items)) {
-      const entry = item.webkitGetAsEntry?.();
-      if (entry?.isDirectory) {
-        // Browsers can't expose the full OS path from a drop.
-        // Populate the text field with the folder name so the user can
-        // complete the path manually, or use Browse above for a full path.
-        this.selectedPath = entry.name;
-        this.error = 'Drag & drop cannot get the full path — use Browse or type the full path below.';
-        return;
-      }
+  selectBrowseEntry(entry: BrowseEntry): void {
+    if (!this.browseData) return;
+    const fullPath = this.browseData.path.replace(/\/$/, '') + '/' + entry.name;
+    if (entry.isGitRepo) {
+      this.browsing = false;
+      this.openPath(fullPath);
+    } else {
+      this.navigateTo(fullPath);
     }
+  }
+
+  cancelBrowse(): void {
+    this.browsing = false;
+    this.browseData = null;
+  }
+
+  openRecent(repo: RecentRepo): void {
+    if (this.loadingPath || this.loading) return;
+    this.loadingPath = repo.path;
+    this.error = '';
+    this.openPath(repo.path);
+  }
+
+  openPath(path: string): void {
+    this.loading = true;
+    this.error = '';
+    this.api.setRepo(path).subscribe({
+      next: (info) => {
+        this.loading = false;
+        this.loadingPath = null;
+        this.repoOpened.emit(info.path!);
+      },
+      error: (err: HttpErrorResponse) => {
+        this.loading = false;
+        this.loadingPath = null;
+        this.error = (err.error as { error?: string })?.error ?? 'Failed to open repository';
+      }
+    });
   }
 
   cancel(): void {
     this.repoOpened.emit('');
   }
 
-  open(): void {
-    const trimmed = this.selectedPath.trim();
-    if (!trimmed) return;
-    this.loading = true;
-    this.error = '';
-    this.api.setRepo(trimmed).subscribe({
-      next: (info) => {
-        this.loading = false;
-        this.repoOpened.emit(info.path);
-      },
-      error: (err: HttpErrorResponse) => {
-        this.loading = false;
-        this.error = (err.error as { error?: string })?.error ?? 'Failed to open repository';
-      }
-    });
+  removeRecent(repo: RecentRepo, event: MouseEvent): void {
+    event.stopPropagation();
+    this.recentRepos = this.recentRepos.filter(r => r.path !== repo.path);
+    this.api.removeRecentRepo(repo.path).subscribe();
+  }
+
+  formatDate(iso: string): string {
+    const d = new Date(iso);
+    const now = new Date();
+    const diffDays = Math.floor((now.getTime() - d.getTime()) / (1000 * 60 * 60 * 24));
+    if (diffDays === 0) return 'today';
+    if (diffDays === 1) return 'yesterday';
+    if (diffDays < 7) return `${diffDays} days ago`;
+    return d.toLocaleDateString();
   }
 }

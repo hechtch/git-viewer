@@ -1,8 +1,5 @@
 CONTAINER_RUNTIME ?= podman
 
-# Override with: make run GIT_REPO_PATH=/path/to/repo
-GIT_REPO_PATH ?= ../sample-project
-
 .PHONY: install install-backend install-frontend \
         run run-bg run-frontend run-backend \
         build build-frontend build-backend \
@@ -20,10 +17,10 @@ install-frontend:
 	cd frontend && npm install
 
 run: install
-	GIT_REPO_PATH=$(GIT_REPO_PATH) $(MAKE) -j2 run-frontend run-backend
+	$(MAKE) -j2 run-frontend run-backend
 
 run-bg: install
-	GIT_REPO_PATH=$(GIT_REPO_PATH) npx ts-node backend/src/index.ts > /tmp/git-viewer-backend.log 2>&1 & \
+	npx ts-node backend/src/index.ts > /tmp/git-viewer-backend.log 2>&1 & \
 	echo "[backend] PID $$! — logs: /tmp/git-viewer-backend.log"
 	cd frontend && npx ng serve
 
@@ -31,7 +28,7 @@ run-frontend:
 	cd frontend && npx ng serve
 
 run-backend:
-	cd backend && GIT_REPO_PATH=$(GIT_REPO_PATH) npx ts-node src/index.ts
+	cd backend && npx ts-node src/index.ts
 
 build: build-backend build-frontend
 

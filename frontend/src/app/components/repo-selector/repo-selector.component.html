@@ -1,57 +1,92 @@
 <div class="overlay">
-  <div class="dialog">
+  <div class="dialog" [class.wide]="browsing">
     <div class="dialog-header">
-      <h2>Open Repository</h2>
-      @if (canCancel) {
+      <h2>{{ browsing ? 'Browse for Repository' : 'Open Repository' }}</h2>
+      @if (canCancel && !browsing) {
         <button class="close-btn" (click)="cancel()">✕</button>
       }
-    </div>
-
-    <!-- Native OS folder picker -->
-    <div class="pick-section">
-      <button class="pick-btn" (click)="pickFolder()" [disabled]="picking">
-        <span class="pick-icon">📂</span>
-        {{ picking ? 'Opening...' : 'Browse for folder...' }}
-      </button>
-      <p class="pick-hint">Opens a native folder picker dialog</p>
-    </div>
-
-    <div class="divider"><span>or drag a folder here</span></div>
-
-    <!-- Drag and drop zone -->
-    <div
-      class="drop-zone"
-      [class.drag-over]="dragOver"
-      (dragover)="onDragOver($event)"
-      (dragleave)="onDragLeave()"
-      (drop)="onDrop($event)">
-      <p>Drop a folder to select it</p>
-    </div>
-
-    <div class="divider"><span>or type a path</span></div>
-
-    <!-- Manual path input -->
-    <div class="manual-input">
-      <input
-        type="text"
-        [(ngModel)]="selectedPath"
-        placeholder="/home/user/my-project"
-        (keydown.enter)="open()"
-        spellcheck="false"
-        />
-    </div>
-
-    @if (error) {
-      <div class="error">{{ error }}</div>
-    }
-
-    <div class="actions">
-      @if (canCancel) {
-        <button class="secondary" (click)="cancel()">Cancel</button>
+      @if (browsing) {
+        <button class="close-btn" (click)="cancelBrowse()">✕</button>
       }
-      <button class="primary" (click)="open()" [disabled]="loading || !selectedPath.trim()">
-        {{ loading ? 'Opening...' : 'Open' }}
-      </button>
     </div>
+
+    @if (browsing) {
+      <!-- In-app folder browser -->
+      <div class="browse-path">
+        @if (browseData?.parent) {
+          <button class="up-btn" (click)="navigateTo(browseData!.parent!)" [disabled]="browseLoading">↑ Up</button>
+        }
+        <span class="current-path">{{ browseData?.path || '…' }}</span>
+      </div>
+
+      @if (browseLoading) {
+        <div class="browse-loading"><span class="spinner"></span> Loading…</div>
+      } @else if (browseError) {
+        <div class="error">{{ browseError }}</div>
+      } @else if (browseData) {
+        @if (browseData.entries.length === 0) {
+          <div class="browse-empty">No subdirectories found</div>
+        } @else {
+          <ul class="browse-list">
+            @for (entry of browseData.entries; track entry.name) {
+              <li class="browse-item" [class.is-repo]="entry.isGitRepo" (click)="selectBrowseEntry(entry)">
+                @if (entry.isGitRepo) {
+                  <img class="browse-icon git-icon" src="/favicon-dark.png" alt="git repo" />
+                } @else {
+                  <span class="browse-icon">📂</span>
+                }
+                <span class="browse-name">{{ entry.name }}</span>
+                @if (entry.isGitRepo) {
+                  <span class="repo-badge">git</span>
+                }
+              </li>
+            }
+          </ul>
+        }
+      }
+    } @else {
+      <!-- Normal selector -->
+      <div class="pick-section">
+        <button class="pick-btn" (click)="startBrowse()" [disabled]="loading">
+          <span class="pick-icon">📂</span>
+          Browse for folder…
+        </button>
+      </div>
+
+      @if (recentRepos.length > 0) {
+        <div class="divider"><span>recent</span></div>
+
+        <ul class="repo-list">
+          @for (repo of recentRepos; track repo.path) {
+            <li
+              class="repo-item"
+              [class.loading]="loadingPath === repo.path"
+              [class.disabled]="(loadingPath !== null || loading) && loadingPath !== repo.path"
+              (click)="openRecent(repo)">
+              <img class="repo-icon git-icon" src="/favicon-dark.png" alt="git repo" />
+              <div class="repo-info">
+                <span class="repo-name">{{ repo.name }}</span>
+                <span class="repo-path">{{ repo.path }}</span>
+              </div>
+              <span class="repo-date">{{ formatDate(repo.lastOpened) }}</span>
+              @if (loadingPath === repo.path) {
+                <span class="spinner"></span>
+              }
+              <button class="remove-btn" title="Remove from list" (click)="removeRecent(repo, $event)">✕</button>
+            </li>
+          }
+        </ul>
+      }
+
+      @if (error) {
+        <div class="error">{{ error }}</div>
+      }
+
+      @if (canCancel) {
+        <div class="actions">
+          <button class="secondary" (click)="cancel()">Cancel</button>
+        </div>
+      }
+    }
   </div>
 </div>

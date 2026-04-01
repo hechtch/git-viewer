@@ -1,4 +1,5 @@
-import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, HostListener, ViewChild, ElementRef, inject } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, HostListener, HostBinding, ViewChild, ElementRef, inject, ChangeDetectorRef } from '@angular/core';
+import { DecimalPipe } from '@angular/common';
 
 import { BranchInfo, GraphEntry } from '../../services/git-api.service';
 import { computeLayout, LayoutNode, LayoutEdge } from './graph-layout';
@@ -7,6 +8,7 @@ interface RenderEdge {
   path: string;
   color: string;
   merged: boolean;
+  bridging: boolean;
 }
 
 interface RefBadge {
@@ -38,12 +40,13 @@ export interface LaneLabel {
 }
 
 function buildStatusTooltip(info: BranchInfo): string {
-  if (info.ahead === 0) return 'Merged into trunk';
+  const base = info.base ?? 'trunk';
+  if (info.ahead === 0) return `Merged into ${base}`;
   const lines: string[] = [];
   const a = info.ahead ?? 0;
   const b = info.behind ?? 0;
-  lines.push(`${a} commit${a === 1 ? '' : 's'} ahead of trunk`);
-  if (b > 0) lines.push(`${b} commit${b === 1 ? '' : 's'} behind trunk`);
+  lines.push(`${a} commit${a === 1 ? '' : 's'} ahead of ${base}`);
+  if (b > 0) lines.push(`${b} commit${b === 1 ? '' : 's'} behind ${base}`);
   if (!info.isRemote) {
     if (!info.upstream) {
       lines.push('Not pushed to any remote');
@@ -61,7 +64,7 @@ function buildStatusTooltip(info: BranchInfo): string {
 
 @Component({
     selector: 'app-commit-graph',
-    imports: [],
+    imports: [DecimalPipe],
     templateUrl: './commit-graph.component.html',
     styleUrls: ['./commit-graph.component.css']
 })
@@ -70,6 +73,7 @@ export class CommitGraphComponent implements OnChanges {
   @Input() branches: BranchInfo[] = [];
   @Input() currentBranch = '';
   @Input() showMerged = true;
+  @Input() showNames = true;
   @Input() jumpToBranch: string | null = null;
   @Input() viewMode: 'lr' | 'rl' | 'td' | 'bu' = 'lr';
   @Output() commitSelected = new EventEmitter<string>();
@@ -82,13 +86,30 @@ export class CommitGraphComponent implements OnChanges {
   readonly BADGE_PAD = 12;
 
   @ViewChild('graphScroll') graphScrollRef: ElementRef<HTMLElement> | undefined;
+  @ViewChild('laneLabelsEl') laneLabelsRef: ElementRef<HTMLElement> | undefined;
   private hostEl = inject(ElementRef<HTMLElement>);
+  private cdr = inject(ChangeDetectorRef);
 
   renderNodes: RenderNode[] = [];
   allEdges: RenderEdge[] = [];
   laneLabels: LaneLabel[] = [];
   laneStatus = new Map<number, StatusBadge>();
   mergedCols = new Set<number>();
+
+  get visibleNodes(): RenderNode[] {
+    if (this.showMerged) return this.renderNodes;
+    return this.renderNodes.filter(n => !this.mergedCols.has(n.col));
+  }
+
+  get visibleEdges(): RenderEdge[] {
+    if (this.showMerged) return this.allEdges;
+    return this.allEdges.filter(e => !e.merged);  // keeps bridging edges
+  }
+
+  get visibleLaneLabels(): LaneLabel[] {
+    if (this.showMerged) return this.laneLabels;
+    return this.laneLabels.filter(l => !l.merged && !this.mergedCols.has(l.col));
+  }
   selectedSha = '';
   selectedCol = -1;
   toastMessage = '';
@@ -98,6 +119,8 @@ export class CommitGraphComponent implements OnChanges {
   toastCy = 0;
 
   private childrenOf = new Map<string, string[]>();
+  private colRemap = new Map<number, number>();
+  private _visibleMaxCol = 0;
 
   svgWidth = 800;
   svgHeight = 200;
@@ -106,6 +129,8 @@ export class CommitGraphComponent implements OnChanges {
   readonly MIN_ZOOM = 0.3;
   readonly MAX_ZOOM = 2.0;
   readonly ZOOM_STEP = 0.15;
+
+  labelsWidth = 120;
 
   private _maxCol = 0;
   private toastTimer: ReturnType<typeof setTimeout> | null = null;
@@ -117,6 +142,28 @@ export class CommitGraphComponent implements OnChanges {
   get showMouseHover(): boolean {
     return this.mouseActive && !this.usingKeyboard;
   }
+
+  @HostBinding('class.resizing') private resizing = false;
+  statusTooltip: { text: string; x: number; y: number } | null = null;
+
+  showStatusTooltip(event: MouseEvent, text: string): void {
+    const r = (event.target as HTMLElement).getBoundingClientRect();
+    this.statusTooltip = { text, x: r.left, y: r.bottom + 6 };
+  }
+
+  hideStatusTooltip(): void {
+    this.statusTooltip = null;
+  }
+  private resizeStartX = 0;
+  private resizeStartWidth = 0;
+
+  startResize(event: MouseEvent): void {
+    event.preventDefault();
+    this.resizing = true;
+    this.resizeStartX = event.clientX;
+    this.resizeStartWidth = this.labelsWidth;
+  }
+
 
   onMouseMove(): void {
     if (this.usingKeyboard) this.usingKeyboard = false;
@@ -134,9 +181,21 @@ export class CommitGraphComponent implements OnChanges {
       }
       this.buildRenderNodes(nodes);
       this.buildLaneLabels(nodes);
+      this.buildColRemap();
       this.buildEdges();
       this.computeDimensions();
       this.buildChildrenMap();
+      if (changes['entries']) {
+        if (!this.selectedSha && this.renderNodes.length) {
+          this.selectNode(this.renderNodes[0]);
+        }
+        if (this.viewMode === 'lr') {
+          setTimeout(() => {
+            const el = this.graphScrollRef?.nativeElement;
+            if (el) el.scrollLeft = el.scrollWidth;
+          });
+        }
+      }
     }
     if (changes['viewMode'] && !changes['viewMode'].firstChange) {
       const labels: Record<string, string> = {
@@ -149,16 +208,21 @@ export class CommitGraphComponent implements OnChanges {
       // Scroll first (instant), then measure the rect and show the toast
       setTimeout(() => {
         const node = this.renderNodes.find(n => n.entry.sha === this.selectedSha);
-        if (node) this.scrollToNode(node, 'instant');
+        if (node) {
+          this.scrollToNode(node, 'instant');
+        } else if (this.viewMode === 'lr') {
+          const el = this.graphScrollRef?.nativeElement;
+          if (el) el.scrollLeft = el.scrollWidth;
+        }
         this.showToast(label, true);
       });
     }
-    if (this.jumpToBranch) {
-      this.jumpToNamedBranch(this.jumpToBranch);
+    if (changes['jumpToBranch'] && this.jumpToBranch) {
+      setTimeout(() => this.jumpToNamedBranch(this.jumpToBranch!));
     }
   }
 
-  private jumpToNamedBranch(name: string): void {
+  jumpToNamedBranch(name: string): void {
     const node = this.renderNodes.find(n =>
       n.entry.refs.some(r => r.replace('HEAD -> ', '') === name)
     );
@@ -186,7 +250,8 @@ export class CommitGraphComponent implements OnChanges {
 
   /** Position along the lane axis (branches). */
   private lanePos(col: number): number {
-    return col * this.LANE_HEIGHT + this.MARGIN;
+    const mapped = this.colRemap.get(col) ?? col;
+    return mapped * this.LANE_HEIGHT + this.MARGIN;
   }
 
   /** Node X: time axis in LR/RL, lane axis in TD/BU. */
@@ -372,11 +437,11 @@ export class CommitGraphComponent implements OnChanges {
       }
 
       case 'laneUp':
-        target = this.findCrossLaneNeighbor(selected, -1);
+        target = this.findAdjacentLane(selected, -1);
         break;
 
       case 'laneDn':
-        target = this.findCrossLaneNeighbor(selected, +1);
+        target = this.findAdjacentLane(selected, +1);
         break;
 
       default:
@@ -391,6 +456,8 @@ export class CommitGraphComponent implements OnChanges {
         }
         if (event.key === '0' && (event.ctrlKey || event.metaKey)) {
           this.zoom = 1.0; event.preventDefault();
+          const sel = this.renderNodes.find(n => n.entry.sha === this.selectedSha);
+          if (sel) setTimeout(() => this.scrollToNode(sel, 'instant'));
         }
         return;
     }
@@ -411,60 +478,117 @@ export class CommitGraphComponent implements OnChanges {
     this.commitSelected.emit(node.entry.sha);
   }
 
-  onWheel(event: WheelEvent): void {
-    if (event.ctrlKey || event.metaKey) {
-      event.preventDefault();
-      this.adjustZoom(event.deltaY < 0 ? this.ZOOM_STEP : -this.ZOOM_STEP);
+  // ── Ctrl+drag box zoom ────────────────────────────────────────────────────
+
+  zoomBox: { x: number; y: number; w: number; h: number } | null = null;
+  private dragStart: { clientX: number; clientY: number } | null = null;
+
+  laneLabelsOffset = 0;
+
+  onGraphScroll(): void {
+    const el = this.graphScrollRef?.nativeElement;
+    if (el) {
+      this.laneLabelsOffset = -el.scrollTop;
     }
+  }
+
+  onGraphMouseDown(event: MouseEvent): void {
+    if (!(event.ctrlKey || event.metaKey)) return;
+    event.preventDefault();
+    this.dragStart = { clientX: event.clientX, clientY: event.clientY };
+    this.zoomBox = null;
+  }
+
+  @HostListener('document:mousemove', ['$event'])
+  onDragMove(e: MouseEvent): void {
+    if (this.resizing) {
+      this.labelsWidth = Math.max(80, this.resizeStartWidth + e.clientX - this.resizeStartX);
+      return;
+    }
+    if (!this.dragStart) return;
+
+    const el = this.graphScrollRef?.nativeElement;
+    if (!el) return;
+
+    const svgRect = el.querySelector('.graph-svg')?.getBoundingClientRect();
+    if (!svgRect) return;
+
+    // Convert client coords to SVG viewBox coords
+    const toSvg = (clientX: number, clientY: number) => ({
+      x: (clientX - svgRect.left + el.scrollLeft) / this.zoom,
+      y: (clientY - svgRect.top + el.scrollTop) / this.zoom,
+    });
+
+    const p1 = toSvg(this.dragStart.clientX, this.dragStart.clientY);
+    const p2 = toSvg(e.clientX, e.clientY);
+
+    this.zoomBox = {
+      x: Math.min(p1.x, p2.x),
+      y: Math.min(p1.y, p2.y),
+      w: Math.abs(p2.x - p1.x),
+      h: Math.abs(p2.y - p1.y),
+    };
+    this.cdr.detectChanges();
+  }
+
+  @HostListener('document:mouseup')
+  onDragEnd(): void {
+    if (this.resizing) {
+      this.resizing = false;
+      return;
+    }
+    if (!this.dragStart) return;
+
+    const box = this.zoomBox;
+    this.dragStart = null;
+    this.zoomBox = null;
+
+    if (!box || box.w < 10 || box.h < 10) return;
+
+    const el = this.graphScrollRef?.nativeElement;
+    if (!el) return;
+
+    // Determine visible viewport size
+    const viewportW = el.clientWidth;
+    const viewportH = el.clientHeight;
+
+    // Compute zoom to fit the box in viewport
+    const scaleX = viewportW / box.w;
+    const scaleY = viewportH / box.h;
+    const newZoom = Math.min(this.MAX_ZOOM, Math.max(this.MIN_ZOOM, Math.min(scaleX, scaleY)));
+    this.zoom = +newZoom.toFixed(2);
+
+    // Scroll to center the box
+    setTimeout(() => {
+      const centerX = (box.x + box.w / 2) * this.zoom;
+      const centerY = (box.y + box.h / 2) * this.zoom;
+      el.scrollTo({
+        left: Math.max(0, centerX - viewportW / 2),
+        top: Math.max(0, centerY - viewportH / 2),
+        behavior: 'instant',
+      });
+    });
   }
 
   adjustZoom(delta: number): void {
     this.zoom = Math.min(this.MAX_ZOOM, Math.max(this.MIN_ZOOM, +(this.zoom + delta).toFixed(2)));
+    const selected = this.renderNodes.find(n => n.entry.sha === this.selectedSha);
+    if (selected) {
+      setTimeout(() => this.scrollToNode(selected, 'instant'));
+    }
   }
 
   private scrollToNode(node: RenderNode, behavior: ScrollBehavior = 'smooth'): void {
     const el = this.graphScrollRef?.nativeElement;
     if (!el) return;
 
-    if (this.isHorizontal) {
-      // Horizontal: center in graph-scroll
-      const x = this.nodeX(node.row, node.col) * this.zoom;
-      el.scrollTo({ left: Math.max(0, x - el.clientWidth / 2), behavior });
-
-      // Vertical: find scrollable ancestor, center the lane
-      const hostEl = this.hostEl.nativeElement as HTMLElement;
-      let parent: HTMLElement | null = hostEl.parentElement;
-      while (parent) {
-        const style = window.getComputedStyle(parent);
-        if ((style.overflow + ' ' + style.overflowY).includes('auto') ||
-            (style.overflow + ' ' + style.overflowY).includes('scroll')) {
-          const y = this.nodeY(node.row, node.col) * this.zoom;
-          const hostRect = hostEl.getBoundingClientRect();
-          const parentRect = parent.getBoundingClientRect();
-          const graphTop = hostRect.top - parentRect.top + parent.scrollTop;
-          parent.scrollTo({ top: Math.max(0, graphTop + y - parent.clientHeight / 2), behavior });
-          break;
-        }
-        parent = parent.parentElement;
-      }
-    } else {
-      // TD/BU: find scrollable ancestor (graph-scroll is not height-constrained), center the node
-      const hostEl = this.hostEl.nativeElement as HTMLElement;
-      let parent: HTMLElement | null = hostEl.parentElement;
-      while (parent) {
-        const style = window.getComputedStyle(parent);
-        if ((style.overflow + ' ' + style.overflowY).includes('auto') ||
-            (style.overflow + ' ' + style.overflowY).includes('scroll')) {
-          const y = this.nodeY(node.row, node.col) * this.zoom;
-          const hostRect = hostEl.getBoundingClientRect();
-          const parentRect = parent.getBoundingClientRect();
-          const graphTop = hostRect.top - parentRect.top + parent.scrollTop;
-          parent.scrollTo({ top: Math.max(0, graphTop + y - parent.clientHeight / 2), behavior });
-          break;
-        }
-        parent = parent.parentElement;
-      }
-    }
+    const x = this.nodeX(node.row, node.col) * this.zoom;
+    const y = this.nodeY(node.row, node.col) * this.zoom;
+    el.scrollTo({
+      left: Math.max(0, x - el.clientWidth / 2),
+      top: Math.max(0, y - el.clientHeight / 2),
+      behavior,
+    });
   }
 
   // ── Lane / cross-lane navigation ──────────────────────────────────────────
@@ -477,29 +601,12 @@ export class CommitGraphComponent implements OnChanges {
     return sameLane[idx + direction];
   }
 
-  private findCrossLaneNeighbor(current: RenderNode, dir: -1 | 1): RenderNode | undefined {
-    const crossConnected = this.crossLaneConnections(current, dir);
-    if (crossConnected.length > 0) return crossConnected[0];
-
-    const sameLane = this.renderNodes
-      .filter(n => n.col === current.col && n.entry.sha !== current.entry.sha)
-      .sort((a, b) => Math.abs(a.row - current.row) - Math.abs(b.row - current.row));
-
-    for (const candidate of sameLane) {
-      if (this.crossLaneConnections(candidate, dir).length > 0) return candidate;
-    }
-    return undefined;
-  }
-
-  private crossLaneConnections(node: RenderNode, dir: -1 | 1): RenderNode[] {
-    const childShas = this.childrenOf.get(node.entry.sha) ?? [];
-    const connected: RenderNode[] = [
-      ...node.entry.parents.map(sha => this.renderNodes.find(n => n.entry.sha === sha)).filter((n): n is RenderNode => !!n),
-      ...childShas.map(sha => this.renderNodes.find(n => n.entry.sha === sha)).filter((n): n is RenderNode => !!n),
-    ];
-    const inDir = connected.filter(n => dir === -1 ? n.col < node.col : n.col > node.col);
-    inDir.sort((a, b) => dir === -1 ? b.col - a.col : a.col - b.col);
-    return inDir;
+  private findAdjacentLane(current: RenderNode, dir: -1 | 1): RenderNode | undefined {
+    const lane = this.renderNodes.filter(n => n.col === current.col + dir);
+    if (!lane.length) return undefined;
+    return lane.reduce((best, n) =>
+      Math.abs(n.row - current.row) < Math.abs(best.row - current.row) ? n : best
+    );
   }
 
   private buildChildrenMap(): void {
@@ -518,20 +625,8 @@ export class CommitGraphComponent implements OnChanges {
     if (this.toastTimer) clearTimeout(this.toastTimer);
     requestAnimationFrame(() => {
       if (prominent) {
-        // Walk up to the scrollable container (commit-log-panel) — it has a stable visible size
-        // in all modes, unlike the host element which is SVG-height tall in TD/BU.
-        const hostEl = this.hostEl.nativeElement as HTMLElement;
-        let rect: DOMRect = hostEl.getBoundingClientRect();
-        let parent: HTMLElement | null = hostEl.parentElement;
-        while (parent) {
-          const style = window.getComputedStyle(parent);
-          if ((style.overflow + ' ' + style.overflowY).includes('auto') ||
-              (style.overflow + ' ' + style.overflowY).includes('scroll')) {
-            rect = parent.getBoundingClientRect();
-            break;
-          }
-          parent = parent.parentElement;
-        }
+        const el = this.graphScrollRef?.nativeElement;
+        const rect = el ? el.getBoundingClientRect() : this.hostEl.nativeElement.getBoundingClientRect();
         this.toastCx = rect.left + rect.width / 2;
         this.toastCy = rect.top + rect.height / 2;
       }
@@ -544,28 +639,87 @@ export class CommitGraphComponent implements OnChanges {
 
   // ── Build helpers ─────────────────────────────────────────────────────────
 
+  private buildColRemap(): void {
+    this.colRemap.clear();
+    if (this.showMerged) {
+      // Identity mapping — no compaction needed
+      this._visibleMaxCol = this._maxCol;
+      return;
+    }
+    // Collect all used columns that are NOT merged
+    const visibleCols = new Set<number>();
+    for (const node of this.renderNodes) {
+      if (!this.mergedCols.has(node.col)) visibleCols.add(node.col);
+    }
+    const sorted = [...visibleCols].sort((a, b) => a - b);
+    let idx = 0;
+    for (const col of sorted) {
+      this.colRemap.set(col, idx++);
+    }
+    this._visibleMaxCol = Math.max(0, idx - 1);
+  }
+
   private buildLaneLabels(nodes: LayoutNode[]): void {
-    const mergedSet = new Set(
-      this.branches.filter(b => (b.ahead ?? -1) === 0).map(b => b.name)
+    // Active branches: ahead > 0 or is the current branch
+    const activeSet = new Set(
+      this.branches
+        .filter(b => (b.ahead ?? -1) > 0 || b.name === this.currentBranch)
+        .map(b => b.name)
     );
+
     const labelMap = new Map<number, LaneLabel>();
     for (const node of nodes) {
       if (labelMap.has(node.col)) continue;
       if (node.entry.refs.length > 0) {
         const name = node.entry.refs[0].replace('HEAD -> ', '');
+        // A lane is active if ANY of its refs match an active branch
+        const isActive = node.entry.refs.some(r =>
+          activeSet.has(r.replace('HEAD -> ', ''))
+        );
         labelMap.set(node.col, {
           name, col: node.col, color: node.color,
-          merged: mergedSet.has(name),
+          merged: !isActive,
           isCurrent: name === this.currentBranch,
         });
       }
     }
     for (const node of nodes) {
       if (!labelMap.has(node.col)) {
-        labelMap.set(node.col, { name: `lane ${node.col}`, col: node.col, color: node.color });
+        // Check if any ref on any node in this column is active
+        const colNodes = nodes.filter(n => n.col === node.col);
+        const isActive = colNodes.some(n =>
+          n.entry.refs.some(r => activeSet.has(r.replace('HEAD -> ', '')))
+        );
+        labelMap.set(node.col, {
+          name: `lane ${node.col}`, col: node.col, color: node.color,
+          merged: !isActive,
+        });
       }
     }
     this.laneLabels = [...labelMap.values()].sort((a, b) => a.col - b.col);
+
+    // Rebuild mergedCols from lane labels for consistency
+    this.mergedCols.clear();
+    for (const lane of this.laneLabels) {
+      if (lane.merged) this.mergedCols.add(lane.col);
+    }
+
+    this.labelsWidth = this.computeLabelsWidth();
+  }
+
+  private computeLabelsWidth(): number {
+    const HEAD_BADGE_W = 34; // "HEAD" at 10px monospace + padding
+    const GAP = 8;
+    const PAD = 16; // left + right padding
+    let max = 0;
+    for (const lane of this.laneLabels) {
+      let w = lane.name.length * this.CHAR_WIDTH + PAD;
+      if (lane.isCurrent) w += GAP + HEAD_BADGE_W;
+      const status = this.laneStatus.get(lane.col);
+      if (status) w += GAP + status.width;
+      if (w > max) max = w;
+    }
+    return Math.max(120, max);
   }
 
   private buildRenderNodes(nodes: LayoutNode[]): void {
@@ -609,19 +763,48 @@ export class CommitGraphComponent implements OnChanges {
 
       return { ...node, badges };
     });
-
-    this.mergedCols.clear();
-    for (const [col, status] of this.laneStatus) {
-      if (status.isMerged) this.mergedCols.add(col);
-    }
   }
 
   private buildEdges(): void {
+    // Find merged columns that connect to active columns (directly or transitively)
+    const connectedMergedCols = new Set<number>();
+    // Seed: merged cols with a direct edge to/from an active col
+    for (const node of this.renderNodes) {
+      for (const edge of node.edges) {
+        const fromMerged = this.mergedCols.has(node.col);
+        const toMerged = this.mergedCols.has(edge.toCol);
+        if (fromMerged && !toMerged) connectedMergedCols.add(node.col);
+        if (toMerged && !fromMerged) connectedMergedCols.add(edge.toCol);
+      }
+    }
+    // Propagate: merged cols connected to other connected merged cols
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (const node of this.renderNodes) {
+        for (const edge of node.edges) {
+          if (this.mergedCols.has(node.col) && this.mergedCols.has(edge.toCol)) {
+            if (connectedMergedCols.has(node.col) && !connectedMergedCols.has(edge.toCol)) {
+              connectedMergedCols.add(edge.toCol); changed = true;
+            }
+            if (connectedMergedCols.has(edge.toCol) && !connectedMergedCols.has(node.col)) {
+              connectedMergedCols.add(node.col); changed = true;
+            }
+          }
+        }
+      }
+    }
+
     this.allEdges = [];
     for (const node of this.renderNodes) {
       for (const edge of node.edges) {
-        const merged = this.mergedCols.has(node.col) && this.mergedCols.has(edge.toCol);
-        this.allEdges.push({ path: this.edgePath(node.row, edge), color: edge.color, merged });
+        const fromMerged = this.mergedCols.has(node.col);
+        const toMerged = this.mergedCols.has(edge.toCol);
+        const fullyMerged = fromMerged && toMerged;
+        const connected = connectedMergedCols.has(node.col) || connectedMergedCols.has(edge.toCol);
+        const merged = fullyMerged && !connected;
+        const bridging = (fromMerged !== toMerged) || (fullyMerged && connected);
+        this.allEdges.push({ path: this.edgePath(node.row, edge), color: edge.color, merged, bridging });
       }
     }
   }
@@ -644,11 +827,12 @@ export class CommitGraphComponent implements OnChanges {
   }
 
   private computeDimensions(): void {
+    const cols = this._visibleMaxCol + 1;
     if (this.isHorizontal) {
       this.svgWidth = this.entries.length * this.COMMIT_SPACING + this.MARGIN * 2;
-      this.svgHeight = (this._maxCol + 1) * this.LANE_HEIGHT + this.MARGIN * 2;
+      this.svgHeight = cols * this.LANE_HEIGHT + this.MARGIN * 2;
     } else {
-      this.svgWidth = (this._maxCol + 1) * this.LANE_HEIGHT + this.MARGIN * 2;
+      this.svgWidth = cols * this.LANE_HEIGHT + this.MARGIN * 2;
       this.svgHeight = this.entries.length * this.COMMIT_SPACING + this.MARGIN * 2;
     }
   }
