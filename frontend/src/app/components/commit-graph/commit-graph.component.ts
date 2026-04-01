@@ -418,11 +418,11 @@ export class CommitGraphComponent implements OnChanges {
       }
 
       case 'laneUp':
-        target = this.findCrossLaneNeighbor(selected, -1);
+        target = this.findAdjacentLane(selected, -1);
         break;
 
       case 'laneDn':
-        target = this.findCrossLaneNeighbor(selected, +1);
+        target = this.findAdjacentLane(selected, +1);
         break;
 
       default:
@@ -523,29 +523,12 @@ export class CommitGraphComponent implements OnChanges {
     return sameLane[idx + direction];
   }
 
-  private findCrossLaneNeighbor(current: RenderNode, dir: -1 | 1): RenderNode | undefined {
-    const crossConnected = this.crossLaneConnections(current, dir);
-    if (crossConnected.length > 0) return crossConnected[0];
-
-    const sameLane = this.renderNodes
-      .filter(n => n.col === current.col && n.entry.sha !== current.entry.sha)
-      .sort((a, b) => Math.abs(a.row - current.row) - Math.abs(b.row - current.row));
-
-    for (const candidate of sameLane) {
-      if (this.crossLaneConnections(candidate, dir).length > 0) return candidate;
-    }
-    return undefined;
-  }
-
-  private crossLaneConnections(node: RenderNode, dir: -1 | 1): RenderNode[] {
-    const childShas = this.childrenOf.get(node.entry.sha) ?? [];
-    const connected: RenderNode[] = [
-      ...node.entry.parents.map(sha => this.renderNodes.find(n => n.entry.sha === sha)).filter((n): n is RenderNode => !!n),
-      ...childShas.map(sha => this.renderNodes.find(n => n.entry.sha === sha)).filter((n): n is RenderNode => !!n),
-    ];
-    const inDir = connected.filter(n => dir === -1 ? n.col < node.col : n.col > node.col);
-    inDir.sort((a, b) => dir === -1 ? b.col - a.col : a.col - b.col);
-    return inDir;
+  private findAdjacentLane(current: RenderNode, dir: -1 | 1): RenderNode | undefined {
+    const lane = this.renderNodes.filter(n => n.col === current.col + dir);
+    if (!lane.length) return undefined;
+    return lane.reduce((best, n) =>
+      Math.abs(n.row - current.row) < Math.abs(best.row - current.row) ? n : best
+    );
   }
 
   private buildChildrenMap(): void {
