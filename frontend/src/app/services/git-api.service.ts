@@ -57,6 +57,7 @@ export interface GraphEntry {
   short: string;
   parents: string[];
   refs: string[];
+  date: string;
   message: string;
 }
 

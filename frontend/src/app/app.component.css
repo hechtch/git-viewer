@@ -33,6 +33,18 @@
 }
 .change-repo-btn:hover { background: #313244; color: #cdd6f4; }
 
+.settings-btn {
+  background: transparent;
+  color: #9399b2;
+  border: 1px solid #45475a;
+  padding: 3px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  white-space: nowrap;
+}
+.settings-btn:hover { background: #313244; color: #cdd6f4; }
+
 .app-shell {
   display: flex;
   flex-direction: column;

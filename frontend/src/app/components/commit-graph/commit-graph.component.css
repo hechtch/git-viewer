@@ -227,6 +227,18 @@
   margin-left: 3px;
 }
 
+.time-watermark-text {
+  fill: #cdd6f4;
+  font-weight: 700;
+  font-family: sans-serif;
+  user-select: none;
+}
+
+.time-watermark-rule {
+  stroke: #cdd6f4;
+  stroke-width: 1;
+}
+
 /* Zoom drag state — hide selection highlights */
 .zoom-dragging .hit-target,
 .zoom-dragging .lane-hit-target {

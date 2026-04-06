@@ -6,6 +6,7 @@ import { RepoStatusComponent } from './components/repo-status/repo-status.compon
 import { CommitLogComponent } from './components/commit-log/commit-log.component';
 import { CommitDetailComponent } from './components/commit-detail/commit-detail.component';
 import { FileTreeComponent } from './components/file-tree/file-tree.component';
+import { SettingsPanelComponent } from './components/settings-panel/settings-panel.component';
 
 @Component({
     selector: 'app-root',
@@ -19,6 +20,7 @@ import { FileTreeComponent } from './components/file-tree/file-tree.component';
         CommitLogComponent,
         CommitDetailComponent,
         FileTreeComponent,
+        SettingsPanelComponent,
     ]
 })
 export class AppComponent implements OnInit {
@@ -26,6 +28,7 @@ export class AppComponent implements OnInit {
 
   repoPath: string | null = null;
   showSelector = false;
+  showSettings = false;
   contentZoom = 1.0;
 
   @HostListener('document:keydown', ['$event'])

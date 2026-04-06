@@ -19,6 +19,7 @@
       <span class="repo-name">{{ repoName }}</span>
       <span class="repo-path">{{ repoPath }}</span>
       <button class="change-repo-btn" (click)="openSelector()">Change repo</button>
+      <button class="settings-btn" (click)="showSettings = true" title="Settings">&#x2699;</button>
     </div>
     <app-repo-status (refreshed)="onRefreshed()"></app-repo-status>
     <div class="main-layout">
@@ -68,4 +69,8 @@
       </main>
     </div>
   </div>
+}
+
+@if (showSettings) {
+  <app-settings-panel (close)="showSettings = false"></app-settings-panel>
 }

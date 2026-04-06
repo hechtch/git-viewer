@@ -251,17 +251,18 @@ export class GitService {
     const raw = await this.git(
       'log',
       '--all',
-      '--format=%H\t%h\t%P\t%D\t%s',
+      '--format=%H\t%h\t%P\t%D\t%aI\t%s',
       '--topo-order'
     );
     if (!raw) return [];
     return raw.split('\n').filter(Boolean).map((line) => {
-      const [sha, short, parents, refs, ...rest] = line.split('\t');
+      const [sha, short, parents, refs, date, ...rest] = line.split('\t');
       return {
         sha,
         short,
         parents: parents ? parents.split(' ') : [],
         refs: refs ? refs.split(', ').map((r) => r.trim()).filter(Boolean) : [],
+        date,
         message: rest.join('\t'),
       };
     });
@@ -338,5 +339,6 @@ export interface GraphEntry {
   short: string;
   parents: string[];
   refs: string[];
+  date: string;
   message: string;
 }
