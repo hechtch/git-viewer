@@ -65,7 +65,7 @@ container-build:
 	$(CONTAINER_RUNTIME) build -t git-viewer:latest .
 
 container-run:
-	$(CONTAINER_RUNTIME) run --rm -v $(GIT_REPO_PATH):/repo -p 3000:3000 git-viewer:latest
+	$(CONTAINER_RUNTIME) run --rm -v $(HOME):$(HOME):ro -e HOME=$(HOME) -p 3000:3000 git-viewer:latest
 
 container-push:
 	$(CONTAINER_RUNTIME) push git-viewer:latest
