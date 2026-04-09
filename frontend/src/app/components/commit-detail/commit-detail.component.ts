@@ -34,7 +34,7 @@ interface DiffLine {
           </div>
           <div class="files-row">
             @for (f of detail.files; track f; let i = $index) {
-              <span class="file-chip" [class]="f.status" (click)="scrollToFile(i)" title="Jump to diff">
+              <span class="file-chip" [class]="f.status" (click)="scrollToFile(i); $event.stopPropagation()" title="Jump to diff">
                 <span class="file-status">{{ f.status[0].toUpperCase() }}</span>{{ f.path }}
               </span>
             }
@@ -211,6 +211,7 @@ export class CommitDetailComponent implements OnChanges {
     // to get the absolute scroll position within the pre
     const preRect = pre.getBoundingClientRect();
     const targetRect = target.getBoundingClientRect();
+    pre.focus({ preventScroll: true });
     pre.scrollTo({ top: pre.scrollTop + (targetRect.top - preRect.top) - 8, behavior: 'smooth' });
 
     // Flash all lines for this file's diff section
